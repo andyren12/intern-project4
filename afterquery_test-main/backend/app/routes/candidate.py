@@ -119,17 +119,19 @@ def start_assessment(slug: str, db: Session = Depends(get_db)):
     db.commit()
     return {
         "git": {
-            "clone_url": f"https://github.com/{cand_repo.repo_full_name}.git?token={token_plain}",
+            "clone_url": f"https://github.com/{cand_repo.repo_full_name}.git",
             "branch": "main",
         },
         "repo": {
             "full_name": cand_repo.repo_full_name,
+            "url": f"https://github.com/{cand_repo.repo_full_name}",
             "pinned_main_sha": cand_repo.pinned_main_sha,
         },
         "invite": {
             "status": invite.status.value,
             "complete_deadline_at": invite.complete_deadline_at,
         },
+        "token": token_plain,
     }
 
 
