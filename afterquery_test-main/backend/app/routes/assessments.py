@@ -1,0 +1,106 @@
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from sqlalchemy import or_, and_, exists
+
+from app.database import get_db
+from app import models
+from app.schemas import AssessmentCreate, AssessmentOut
+
+
+router = APIRouter(prefix="/assessments", tags=["assessments"])
+
+
+@router.post("/", response_model=AssessmentOut)
+def create_assessment(payload: AssessmentCreate, db: Session = Depends(get_db)):
+    assessment = models.Assessment(
+        id=uuid.uuid4(),
+        title=payload.title,
+        description=payload.description,
+        instructions=payload.instructions,
+        seed_repo_url=str(payload.seed_repo_url),
+        start_within_hours=payload.start_within_hours,
+        complete_within_hours=payload.complete_within_hours,
+        created_at=datetime.utcnow(),
+        archived=False,
+    )
+    db.add(assessment)
+    # ensure seed repo row exists with default branch main
+    seed_repo = models.SeedRepo(
+        id=uuid.uuid4(),
+        assessment_id=assessment.id,
+        default_branch="main",
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(seed_repo)
+    db.commit()
+    db.refresh(assessment)
+    return assessment
+
+
+@router.get("/{assessment_id}", response_model=AssessmentOut)
+def get_assessment(assessment_id: str, db: Session = Depends(get_db)):
+    row = db.query(models.Assessment).get(assessment_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+    return row
+
+
+@router.get("/", response_model=list[AssessmentOut])
+def list_assessments(
+    status: str | None = Query(None, description="available | archived | undefined for all"),
+    db: Session = Depends(get_db),
+):
+    """
+    Challenges listing:
+    - available: assessments.archived = false
+    - archived: assessments.archived = true
+    - undefined/any other: return all
+    """
+    base_query = db.query(models.Assessment)
+
+    if status == "available":
+        return (
+            base_query.filter(models.Assessment.archived.is_(False))
+            .order_by(models.Assessment.created_at.desc())
+            .all()
+        )
+    if status == "archived":
+        return (
+            base_query.filter(models.Assessment.archived.is_(True))
+            .order_by(models.Assessment.created_at.desc())
+            .all()
+        )
+
+    return base_query.order_by(models.Assessment.created_at.desc()).all()
+
+
+@router.put("/{assessment_id}/archive", response_model=AssessmentOut)
+def archive_assessment(assessment_id: str, db: Session = Depends(get_db)):
+    assessment = db.query(models.Assessment).get(assessment_id)
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+    assessment.archived = True
+    db.add(assessment)
+    db.commit()
+    db.refresh(assessment)
+    return assessment
+
+
+@router.put("/{assessment_id}/unarchive", response_model=AssessmentOut)
+def unarchive_assessment(assessment_id: str, db: Session = Depends(get_db)):
+    assessment = db.query(models.Assessment).get(assessment_id)
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+    assessment.archived = False
+    db.add(assessment)
+    db.commit()
+    db.refresh(assessment)
+    return assessment
+
+

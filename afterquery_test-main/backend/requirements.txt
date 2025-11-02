@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+httpx
+psycopg2-binary
+email-validator
+python-dotenv
+resend
