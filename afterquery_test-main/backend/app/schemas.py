@@ -65,6 +65,7 @@ class AssessmentLite(BaseModel):
     id: UUID
     title: str
     seed_repo_url: str
+    archived: bool
 
     class Config:
         from_attributes = True
