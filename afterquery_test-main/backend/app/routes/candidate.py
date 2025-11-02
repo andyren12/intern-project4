@@ -30,7 +30,7 @@ def get_start_page(slug: str, db: Session = Depends(get_db)):
     if not assessment:
         raise HTTPException(status_code=404, detail="Assessment not found")
 
-    return {
+    result = {
         "assessment": {
             "title": assessment.title,
             "instructions": assessment.instructions,
@@ -45,6 +45,25 @@ def get_start_page(slug: str, db: Session = Depends(get_db)):
             "submitted_at": invite.submitted_at,
         },
     }
+
+    # If assessment has been started, include repository information
+    if invite.status in [models.InviteStatus.started, models.InviteStatus.submitted]:
+        cand_repo = db.query(models.CandidateRepo).filter(
+            models.CandidateRepo.invite_id == invite.id
+        ).first()
+
+        if cand_repo:
+            result["git"] = {
+                "clone_url": f"https://github.com/{cand_repo.repo_full_name}.git",
+                "branch": "main",
+            }
+            result["repo"] = {
+                "full_name": cand_repo.repo_full_name,
+                "url": f"https://github.com/{cand_repo.repo_full_name}",
+                "pinned_main_sha": cand_repo.pinned_main_sha,
+            }
+
+    return result
 
 
 @router.post("/start/{slug}")

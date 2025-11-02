@@ -18,6 +18,15 @@ export type StartMeta = {
     started_at?: string | null;
     submitted_at?: string | null;
   };
+  git?: {
+    clone_url: string;
+    branch: string;
+  };
+  repo?: {
+    url: string;
+    full_name: string;
+    pinned_main_sha: string;
+  };
 };
 
 export default function CandidateStartPage({ slug }: { slug: string }) {
@@ -38,7 +47,16 @@ export default function CandidateStartPage({ slug }: { slug: string }) {
   useEffect(() => {
     api
       .get<StartMeta>(`/api/candidate/start/${slug}`)
-      .then(setMeta)
+      .then((data) => {
+        setMeta(data);
+        // If assessment already started, populate git and repo info
+        if (data.git) {
+          setGit(data.git);
+        }
+        if (data.repo) {
+          setRepoUrl(data.repo.url);
+        }
+      })
       .catch((e) => setError(e?.message || "Failed to load"))
       .finally(() => setLoading(false));
   }, [slug]);
@@ -149,7 +167,7 @@ export default function CandidateStartPage({ slug }: { slug: string }) {
           {repoUrl && (
             <div className="mt-2">
               <a
-                href={repoUrl + `?token=${token}`}
+                href={token ? repoUrl + `?token=${token}` : repoUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-600 hover:text-blue-800 text-sm underline"
