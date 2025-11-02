@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import ChallengeCreationForm, {
   Assessment,
 } from "../../components/ChallengeCreationForm";
+import InviteForm from "@/components/InviteForm";
 import { api } from "@/utils/api";
 
 async function fetchAvailableAssessments(): Promise<Assessment[]> {
@@ -21,6 +22,8 @@ export default function ChallengesPage() {
     "available"
   );
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [inviteModalAssessment, setInviteModalAssessment] =
+    useState<Assessment | null>(null);
 
   // Fetch assessments whenever the active tab changes
   useEffect(() => {
@@ -144,12 +147,12 @@ export default function ChallengesPage() {
                     <div className="flex items-center gap-2">
                       {activeTab === "available" ? (
                         <>
-                          <a
-                            href={`/challenges/${a.id}`}
-                            className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1.5 rounded-md no-underline"
+                          <button
+                            onClick={() => setInviteModalAssessment(a)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1.5 rounded-md cursor-pointer border-none"
                           >
                             Invite
-                          </a>
+                          </button>
                           <button
                             onClick={async () => {
                               await api.put<Assessment>(
@@ -185,6 +188,23 @@ export default function ChallengesPage() {
           )}
         </div>
       </div>
+
+      {inviteModalAssessment && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50"
+          onClick={() => setInviteModalAssessment(null)}
+        >
+          <div
+            className="bg-white rounded-lg p-6 max-w-lg w-full shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <InviteForm
+              assessment={inviteModalAssessment}
+              onSuccess={() => setInviteModalAssessment(null)}
+            />
+          </div>
+        </div>
+      )}
     </main>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "@/utils/api";
 import type { Assessment } from "@/components/ChallengeCreationForm";
 
@@ -15,23 +15,16 @@ export type Invite = {
   created_at: string;
 };
 
-export default function InviteForm({ assessment }: { assessment?: Assessment }) {
-  const [assessments, setAssessments] = useState<Assessment[]>([]);
+export default function InviteForm({
+  assessment,
+  onSuccess,
+}: {
+  assessment?: Assessment;
+  onSuccess?: () => void;
+}) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [lastInviteId, setLastInviteId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (assessment) {
-      setAssessments([assessment]);
-    } else {
-      api
-        .get<Assessment[]>("/api/assessments/?status=available")
-        .then(setAssessments)
-        .catch(() => setAssessments([]));
-    }
-  }, [assessment?.id]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -43,11 +36,25 @@ export default function InviteForm({ assessment }: { assessment?: Assessment }) 
     try {
       const email = String(formData.get("email") || "").trim();
       const full_name = String(formData.get("full_name") || "").trim();
-      if (!assessment?.id || !email) throw new Error("Assessment and email are required");
-      const created = await api.post<Invite>("/api/invites/", { assessment_id: assessment.id, email, full_name });
-      setLastInviteId(created.id);
-      setSuccess(`Invite created. Start slug: ${created.start_url_slug || "(pending)"}`);
+      if (!assessment?.id || !email)
+        throw new Error("Assessment and email are required");
+
+      // Create invite - backend automatically sends the invite email
+      await api.post<Invite>("/api/invites/", {
+        assessment_id: assessment.id,
+        email,
+        full_name,
+      });
+
+      setSuccess(`Invite sent successfully to ${email}`);
       (e.currentTarget as HTMLFormElement)?.reset();
+
+      // call onSuccess if provided and close modal after short delay
+      if (onSuccess) {
+        setTimeout(() => {
+          onSuccess();
+        }, 1500);
+      }
     } catch (e: any) {
       setError(e?.message || "Failed to create invite");
     } finally {
@@ -55,35 +62,13 @@ export default function InviteForm({ assessment }: { assessment?: Assessment }) 
     }
   }
 
-  async function sendInviteEmail() {
-    if (!lastInviteId) return;
-    try {
-      setError(null);
-      setSuccess(null);
-      await api.post(`/api/email/send-invite/${lastInviteId}`);
-      setSuccess("Invite email sent.");
-    } catch (e: any) {
-      setError(e?.message || "Failed to send invite email");
-    }
-  }
-
-  async function sendFollowupEmail() {
-    if (!lastInviteId) return;
-    try {
-      setError(null);
-      setSuccess(null);
-      await api.post(`/api/review/followup/${lastInviteId}`);
-      setSuccess("Follow-up email sent.");
-    } catch (e: any) {
-      setError(e?.message || "Failed to send follow-up email");
-    }
-  }
-
   return (
     <form onSubmit={handleSubmit} className="grid gap-3 max-w-2xl">
       <h3 className="m-0 text-xl font-semibold mb-2">Candidate Details</h3>
       {error ? <div className="text-red-700 text-sm py-1">{error}</div> : null}
-      {success ? <div className="text-emerald-700 text-sm py-1">{success}</div> : null}
+      {success ? (
+        <div className="text-emerald-700 text-sm py-1">{success}</div>
+      ) : null}
       <label className="flex flex-col gap-1">
         <div className="text-sm font-medium">Candidate Email</div>
         <input
@@ -113,5 +98,3 @@ export default function InviteForm({ assessment }: { assessment?: Assessment }) 
     </form>
   );
 }
-
-
