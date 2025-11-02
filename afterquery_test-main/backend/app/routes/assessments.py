@@ -116,3 +116,34 @@ def unarchive_assessment(assessment_id: str, db: Session = Depends(get_db)):
     return assessment
 
 
+@router.get("/{assessment_id}/invites")
+def get_assessment_invites(assessment_id: str, db: Session = Depends(get_db)):
+    # gets all invites/submissions for a specific assessment
+    assessment = db.query(models.Assessment).get(assessment_id)
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    invites = (
+        db.query(models.AssessmentInvite)
+        .filter(models.AssessmentInvite.assessment_id == assessment_id)
+        .order_by(models.AssessmentInvite.created_at.desc())
+        .all()
+    )
+
+    results = []
+    for inv in invites:
+        candidate = db.query(models.Candidate).get(inv.candidate_id)
+        results.append({
+            "id": inv.id,
+            "status": inv.status.value if hasattr(inv.status, "value") else str(inv.status),
+            "created_at": inv.created_at,
+            "start_deadline_at": inv.start_deadline_at,
+            "complete_deadline_at": inv.complete_deadline_at,
+            "started_at": inv.started_at,
+            "submitted_at": inv.submitted_at,
+            "candidate": candidate,
+        })
+
+    return results
+
+

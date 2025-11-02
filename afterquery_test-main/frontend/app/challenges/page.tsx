@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import ChallengeCreationForm, { Assessment } from "../../components/ChallengeCreationForm";
+import ChallengeCreationForm, {
+  Assessment,
+} from "../../components/ChallengeCreationForm";
 import { api } from "@/utils/api";
 
 async function fetchAvailableAssessments(): Promise<Assessment[]> {
@@ -15,13 +17,20 @@ async function fetchArchivedAssessments(): Promise<Assessment[]> {
 export default function ChallengesPage() {
   // const [showSuccess, setShowSuccess] = useState(true);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
-  const [activeTab, setActiveTab] = useState<"available" | "archived">("available");
+  const [activeTab, setActiveTab] = useState<"available" | "archived">(
+    "available"
+  );
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   // Fetch assessments whenever the active tab changes
   useEffect(() => {
-    const fetch = activeTab === "available" ? fetchAvailableAssessments : fetchArchivedAssessments;
-    fetch().then(setAssessments).catch(() => setAssessments([]));
+    const fetch =
+      activeTab === "available"
+        ? fetchAvailableAssessments
+        : fetchArchivedAssessments;
+    fetch()
+      .then(setAssessments)
+      .catch(() => setAssessments([]));
   }, [activeTab]);
 
   return (
@@ -43,7 +52,9 @@ export default function ChallengesPage() {
       <h1 className="text-3xl font-semibold mb-6 text-gray-800">Challenges</h1>
 
       <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8 shadow-sm">
-        <p className="mb-4 text-gray-700">To create a new challenge click below:</p>
+        <p className="mb-4 text-gray-700">
+          To create a new challenge click below:
+        </p>
         <button
           onClick={() => setShowCreateForm(!showCreateForm)}
           className="bg-emerald-500 hover:bg-emerald-600 text-white border-none rounded-md px-5 py-2.5 text-sm font-medium cursor-pointer transition-colors"
@@ -68,8 +79,8 @@ export default function ChallengesPage() {
           <button
             onClick={() => setActiveTab("available")}
             className={`bg-transparent border-none pb-2 text-sm cursor-pointer transition-all underline ${
-              activeTab === "available" 
-                ? "text-blue-600 font-medium border-b-2 border-blue-600" 
+              activeTab === "available"
+                ? "text-blue-600 font-medium border-b-2 border-blue-600"
                 : "text-gray-500 font-normal border-b-2 border-transparent"
             }`}
           >
@@ -78,8 +89,8 @@ export default function ChallengesPage() {
           <button
             onClick={() => setActiveTab("archived")}
             className={`bg-transparent border-none pb-2 text-sm cursor-pointer transition-all underline ${
-              activeTab === "archived" 
-                ? "text-blue-600 font-medium border-b-2 border-blue-600" 
+              activeTab === "archived"
+                ? "text-blue-600 font-medium border-b-2 border-blue-600"
                 : "text-gray-500 font-normal border-b-2 border-transparent"
             }`}
           >
@@ -98,8 +109,8 @@ export default function ChallengesPage() {
               </p>
               <p className="text-sm text-gray-500">
                 If this is your first time here, why not{" "}
-                <a 
-                  href="#" 
+                <a
+                  href="#"
                   onClick={(e) => {
                     e.preventDefault();
                     setShowCreateForm(true);
@@ -114,11 +125,21 @@ export default function ChallengesPage() {
           ) : (
             <ul className="list-none p-0">
               {assessments.map((a) => (
-                <li key={a.id} className="mb-4 p-4 border border-gray-200 rounded-md hover:border-gray-300 transition-colors">
+                <li
+                  key={a.id}
+                  className="mb-4 p-4 border border-gray-200 rounded-md hover:border-gray-300 transition-colors"
+                >
                   <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="font-semibold mb-1">{a.title}</div>
-                      <div className="text-xs text-gray-500">{a.seed_repo_url}</div>
+                    <div className="flex-1">
+                      <a
+                        href={`/challenges/${a.id}`}
+                        className="font-semibold mb-1 text-gray-900 hover:text-blue-600 no-underline block"
+                      >
+                        {a.title}
+                      </a>
+                      <div className="text-xs text-gray-500">
+                        {a.seed_repo_url}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {activeTab === "available" ? (
@@ -131,7 +152,9 @@ export default function ChallengesPage() {
                           </a>
                           <button
                             onClick={async () => {
-                              await api.put<Assessment>(`/api/assessments/${a.id}/archive`);
+                              await api.put<Assessment>(
+                                `/api/assessments/${a.id}/archive`
+                              );
                               const updated = await fetchAvailableAssessments();
                               setAssessments(updated);
                             }}
@@ -143,7 +166,9 @@ export default function ChallengesPage() {
                       ) : (
                         <button
                           onClick={async () => {
-                            await api.put<Assessment>(`/api/assessments/${a.id}/unarchive`);
+                            await api.put<Assessment>(
+                              `/api/assessments/${a.id}/unarchive`
+                            );
                             const updated = await fetchArchivedAssessments();
                             setAssessments(updated);
                           }}
