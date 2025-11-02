@@ -10,6 +10,7 @@ from sqlalchemy import or_, and_, exists
 from app.database import get_db
 from app import models
 from app.schemas import AssessmentCreate, AssessmentOut
+from app.services.github_service import GitHubService
 
 
 router = APIRouter(prefix="/assessments", tags=["assessments"])
@@ -17,6 +18,16 @@ router = APIRouter(prefix="/assessments", tags=["assessments"])
 
 @router.post("/", response_model=AssessmentOut)
 def create_assessment(payload: AssessmentCreate, db: Session = Depends(get_db)):
+    # Validate seed repository before creating assessment
+    try:
+        gh = GitHubService()
+        seed_full_name = gh.ensure_seed_repo(str(payload.seed_repo_url))
+        seed_sha = gh.get_branch_sha(seed_full_name, branch="main")
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=f"GitHub configuration error: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to validate seed repository: {str(e)}")
+
     assessment = models.Assessment(
         id=uuid.uuid4(),
         title=payload.title,
@@ -29,11 +40,12 @@ def create_assessment(payload: AssessmentCreate, db: Session = Depends(get_db)):
         archived=False,
     )
     db.add(assessment)
-    # ensure seed repo row exists with default branch main
+    # ensure seed repo row exists with default branch main and store the validated SHA
     seed_repo = models.SeedRepo(
         id=uuid.uuid4(),
         assessment_id=assessment.id,
         default_branch="main",
+        latest_main_sha=seed_sha,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
