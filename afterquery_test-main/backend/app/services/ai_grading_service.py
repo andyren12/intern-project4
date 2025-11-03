@@ -72,14 +72,14 @@ class AIGradingService:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are an expert code reviewer tasked with evaluating programming assignments. Provide objective, constructive feedback based on the given rubric."
+                        "content": "You are an expert code reviewer with high standards. You provide rigorous, detailed evaluations with precise numerical scores. You use the full scoring range and avoid rounding to increments of 5. Your feedback is specific, citing actual code and concrete issues."
                     },
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                temperature=0.3,  # Lower temperature for more consistent scoring
+                temperature=0.4,  # Slightly higher for more varied, precise scoring
                 response_format={"type": "json_object"}
             )
 
@@ -141,7 +141,7 @@ class AIGradingService:
                 assignment_context += f"**Instructions:**\n{assessment_instructions}\n\n"
 
         prompt = f"""
-You are grading a programming assignment submission. Analyze the code changes and provide scores based on the rubric below.
+You are an expert code reviewer grading a programming assignment. Your grading must be rigorous, specific, and use the full scoring range.
 
 {assignment_context}
 ## CODE CHANGES
@@ -153,25 +153,46 @@ You are grading a programming assignment submission. Analyze the code changes an
 ## GRADING RUBRIC
 {criteria_description}
 
-## INSTRUCTIONS
-For each criterion:
-1. Review the assignment context to understand what was required
-2. Analyze the code thoroughly against the requirements
-3. Assign a score based on the criterion's scoring system
-4. Provide clear, constructive reasoning that references specific code examples
+## GRADING INSTRUCTIONS
+
+**Critical Guidelines:**
+1. **Use granular scores** - Do NOT round to increments of 5. Use precise scores like 73, 84, 91, etc.
+2. **Be rigorous** - Perfect scores (100) should be rare and only for truly exceptional work
+3. **Reference specific code** - Cite file names, line numbers, or code snippets in your reasoning
+4. **Identify concrete issues** - Point out specific problems, not just general observations
+5. **Consider the full range**:
+   - 90-100: Exceptional, exceeds requirements with no significant issues
+   - 80-89: Strong work, meets requirements with minor issues
+   - 70-79: Adequate, meets most requirements but has notable gaps
+   - 60-69: Needs improvement, missing key requirements or has significant issues
+   - Below 60: Does not meet basic requirements
+
+**For each criterion:**
+1. Review the assignment requirements carefully
+2. Examine the actual code implementation in detail
+3. Identify specific strengths (with code examples)
+4. Identify specific weaknesses (with code examples)
+5. Assign a precise, granular score that reflects the exact quality level
+6. Write detailed reasoning that explains the exact score
+
+**Your reasoning must include:**
+- Specific file names and what you observed in them
+- Concrete examples of good or problematic code
+- Why you gave this specific score (not 2-3 points higher or lower)
+- What would be needed to achieve a higher score
 
 Return your evaluation as JSON in this exact format:
 {{
   "scores": {{
     "criterion_name": {{
-      "score": <numeric_score>,
+      "score": <precise_numeric_score>,
       "max_score": <max_possible_score>,
-      "reasoning": "<detailed explanation>"
+      "reasoning": "<detailed explanation with specific examples>"
     }}
   }}
 }}
 
-Be objective and fair. Focus on what the code demonstrates, not what's missing unless that's explicitly part of the criterion.
+Remember: Be precise and rigorous. A score of 85 is meaningfully different from 87 or 83.
 """
         return prompt
 
