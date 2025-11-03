@@ -42,6 +42,7 @@ export interface RankingEntry {
   graded_at: string;
   status: string;
   submitted_at?: string;
+  manual_rank?: number | null;
 }
 
 export interface AIGradingResult {
@@ -93,4 +94,7 @@ export const gradingApi = {
 
   getUngraded: (assessmentId: string) =>
     api.get<any[]>(`/api/grading/rankings/ungraded/${assessmentId}`),
+
+  updateRankingsOrder: (assessmentId: string, rankings: Array<{ invite_id: string; manual_rank: number | null }>) =>
+    api.put<{ message: string }>(`/api/grading/rankings/assessment/${assessmentId}/reorder`, { rankings }),
 };

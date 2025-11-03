@@ -206,6 +206,7 @@ class SubmissionScore(Base):
     graded_by = Column(Text)  # admin email or 'ai'
     graded_at = Column(DateTime(timezone=True), nullable=False)
     notes = Column(Text)
+    manual_rank = Column(Integer)  # Optional manual ranking position set by admin (1=first, 2=second, etc.)
 
     invite = relationship("AssessmentInvite", backref="score", uselist=False)
 

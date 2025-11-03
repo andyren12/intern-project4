@@ -246,6 +246,12 @@ class RankingEntry(BaseModel):
     graded_at: datetime
     status: str
     submitted_at: datetime | None
+    manual_rank: int | None = None
+
+
+class UpdateRankingsRequest(BaseModel):
+    """Request to update manual ranking order"""
+    rankings: list[dict[str, Any]]  # List of {invite_id: str, manual_rank: int}
 
     class Config:
         from_attributes = True

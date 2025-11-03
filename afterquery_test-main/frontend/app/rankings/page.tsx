@@ -14,6 +14,8 @@ export default function RankingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("submitted");
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (assessmentId) {
@@ -40,6 +42,70 @@ export default function RankingsPage() {
     }
   }
 
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) return;
+
+    const newRankings = [...rankings];
+    const draggedItem = newRankings[draggedIndex];
+    newRankings.splice(draggedIndex, 1);
+    newRankings.splice(index, 0, draggedItem);
+
+    setDraggedIndex(index);
+    setRankings(newRankings);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+  };
+
+  const saveRankingsOrder = async () => {
+    if (!assessmentId) return;
+
+    setSaving(true);
+    setError(null);
+    try {
+      // Create rankings array with manual_rank based on current order
+      const rankingsToSave = rankings.map((entry, index) => ({
+        invite_id: entry.invite_id,
+        manual_rank: index + 1, // 1-indexed
+      }));
+
+      await gradingApi.updateRankingsOrder(assessmentId, rankingsToSave);
+      await loadRankings(); // Reload to get updated data
+    } catch (err: any) {
+      setError(err?.message || "Failed to save rankings order");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const resetRankingsOrder = async () => {
+    if (!assessmentId) return;
+    if (!confirm("Reset to automatic score-based ranking?")) return;
+
+    setSaving(true);
+    setError(null);
+    try {
+      // Set all manual_rank to null to reset to score-based ordering
+      const rankingsToSave = rankings.map((entry) => ({
+        invite_id: entry.invite_id,
+        manual_rank: null,
+      }));
+
+      await gradingApi.updateRankingsOrder(assessmentId, rankingsToSave);
+      await loadRankings(); // Reload to get updated data
+    } catch (err: any) {
+      setError(err?.message || "Failed to reset rankings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!assessmentId) {
     return (
       <main className="max-w-6xl mx-auto p-6">
@@ -64,6 +130,25 @@ export default function RankingsPage() {
       {error && (
         <div className="bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded mb-6">
           {error}
+        </div>
+      )}
+
+      {rankings.length > 0 && (
+        <div className="mb-4 flex gap-3">
+          <button
+            onClick={saveRankingsOrder}
+            disabled={saving}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+          >
+            {saving ? "Saving..." : "Save Manual Order"}
+          </button>
+          <button
+            onClick={resetRankingsOrder}
+            disabled={saving}
+            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Reset to Score Order
+          </button>
         </div>
       )}
 
@@ -121,9 +206,19 @@ export default function RankingsPage() {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {rankings.map((entry, index) => (
-                <tr key={entry.invite_id} className="hover:bg-gray-50">
+                <tr
+                  key={entry.invite_id}
+                  draggable
+                  onDragStart={() => handleDragStart(index)}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDragEnd={handleDragEnd}
+                  className={`hover:bg-gray-50 cursor-move ${
+                    draggedIndex === index ? "opacity-50" : ""
+                  }`}
+                >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
+                      <span className="text-gray-400 text-lg">⋮⋮</span>
                       <span
                         className={`
                           inline-flex items-center justify-center w-8 h-8 rounded-full font-bold

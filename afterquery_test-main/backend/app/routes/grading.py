@@ -23,6 +23,7 @@ from app.schemas import (
     AIGradingResult,
     RankingEntry,
     CriterionScore,
+    UpdateRankingsRequest,
 )
 from app.services.ai_grading_service import AIGradingService
 from app.services.github_service import GitHubService
@@ -345,8 +346,12 @@ def get_assessment_rankings(
     if status and status != "all":
         query = query.filter(models.AssessmentInvite.status == status)
 
-    # Order by score descending
-    query = query.order_by(desc(models.SubmissionScore.total_score))
+    # Order by manual_rank first (if set), then by total_score descending
+    # NULLs in manual_rank go last, so unranked candidates are sorted by score
+    query = query.order_by(
+        models.SubmissionScore.manual_rank.asc().nullslast(),
+        desc(models.SubmissionScore.total_score)
+    )
 
     results = query.all()
 
@@ -362,6 +367,7 @@ def get_assessment_rankings(
             graded_at=score.graded_at,
             status=invite.status.value if hasattr(invite.status, "value") else str(invite.status),
             submitted_at=invite.submitted_at,
+            manual_rank=score.manual_rank,
         ))
 
     return rankings
@@ -413,6 +419,46 @@ def get_ai_grading_logs(invite_id: str, db: Session = Depends(get_db)):
         "criteria_analyzed": log.criteria_analyzed,
         "created_at": log.created_at,
     } for log in logs]
+
+
+@router.put("/rankings/assessment/{assessment_id}/reorder", status_code=200)
+def update_rankings_order(
+    assessment_id: str,
+    payload: UpdateRankingsRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Update manual ranking order for an assessment.
+    Admin can drag-and-drop to reorder candidates.
+
+    The rankings list should contain objects with:
+    - invite_id: UUID of the invite
+    - manual_rank: Integer position (1=first, 2=second, etc.)
+    """
+    # Verify assessment exists
+    assessment = db.query(models.Assessment).get(assessment_id)
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    # Update manual_rank for each submission score
+    for ranking_item in payload.rankings:
+        invite_id = ranking_item.get("invite_id")
+        manual_rank = ranking_item.get("manual_rank")
+
+        if not invite_id:
+            continue
+
+        # Find the score for this invite
+        score = db.query(models.SubmissionScore).filter(
+            models.SubmissionScore.invite_id == invite_id
+        ).first()
+
+        if score:
+            score.manual_rank = manual_rank if manual_rank is not None else None
+
+    db.commit()
+
+    return {"message": "Rankings updated successfully"}
 
 
 # ============================================================================
