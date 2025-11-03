@@ -397,6 +397,24 @@ def get_ungraded_submissions(assessment_id: str, db: Session = Depends(get_db)):
     return results
 
 
+@router.get("/ai-grade/logs/{invite_id}")
+def get_ai_grading_logs(invite_id: str, db: Session = Depends(get_db)):
+    """Get AI grading logs for a submission to debug auto-grading issues"""
+
+    logs = db.query(models.AIGradingLog).filter(
+        models.AIGradingLog.invite_id == invite_id
+    ).order_by(models.AIGradingLog.created_at.desc()).all()
+
+    return [{
+        "id": log.id,
+        "model": log.model,
+        "prompt_tokens": log.prompt_tokens,
+        "completion_tokens": log.completion_tokens,
+        "criteria_analyzed": log.criteria_analyzed,
+        "created_at": log.created_at,
+    } for log in logs]
+
+
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
