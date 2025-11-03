@@ -102,4 +102,9 @@ export const gradingApi = {
     api.post<{ message: string; sent_count: number; failed_count: number; failed_emails: any[] }>(
       `/api/grading/rankings/assessment/${assessmentId}/send-followup?top_n=${topN}${status ? `&status=${status}` : ""}`,
     ),
+
+  sendBulkScheduling: (assessmentId: string, topN: number, status?: string) =>
+    api.post<{ message: string; sent_count: number; failed_count: number; failed_emails: any[] }>(
+      `/api/grading/rankings/assessment/${assessmentId}/send-scheduling?top_n=${topN}${status ? `&status=${status}` : ""}`,
+    ),
 };

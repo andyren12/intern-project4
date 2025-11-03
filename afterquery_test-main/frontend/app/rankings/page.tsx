@@ -19,6 +19,8 @@ export default function RankingsPage() {
   const [saving, setSaving] = useState(false);
   const [emailTopNInput, setEmailTopNInput] = useState("5");
   const [sendingEmails, setSendingEmails] = useState(false);
+  const [scheduleTopNInput, setScheduleTopNInput] = useState("5");
+  const [sendingScheduling, setSendingScheduling] = useState(false);
 
   useEffect(() => {
     if (assessmentId) {
@@ -136,6 +138,33 @@ export default function RankingsPage() {
     }
   };
 
+  const sendBulkSchedulingEmails = async () => {
+    if (!assessmentId) return;
+
+    const scheduleTopN = parseInt(scheduleTopNInput) || 1;
+    if (!confirm(`Send scheduling invitations to the top ${scheduleTopN} candidate${scheduleTopN !== 1 ? 's' : ''}?`)) return;
+
+    setSendingScheduling(true);
+    setError(null);
+    try {
+      const result = await gradingApi.sendBulkScheduling(assessmentId, scheduleTopN, statusFilter);
+
+      if (result.failed_count > 0) {
+        alert(
+          `Sent ${result.sent_count} scheduling invitations successfully.\n` +
+          `Failed to send ${result.failed_count} invitations.\n\n` +
+          `Failed recipients:\n${result.failed_emails.map((f) => `- ${f.email}: ${f.error}`).join("\n")}`
+        );
+      } else {
+        alert(`Successfully sent scheduling invitations to top ${scheduleTopN} candidate${scheduleTopN !== 1 ? 's' : ''}!`);
+      }
+    } catch (err: any) {
+      setError(err?.message || "Failed to send scheduling invitations");
+    } finally {
+      setSendingScheduling(false);
+    }
+  };
+
   if (!assessmentId) {
     return (
       <main className="max-w-6xl mx-auto p-6">
@@ -203,6 +232,31 @@ export default function RankingsPage() {
             className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 disabled:opacity-50 font-medium"
           >
             {sendingEmails ? "Sending..." : "Send Follow-Up Emails"}
+          </button>
+          <div className="border-l border-gray-300 h-8"></div>
+          <label className="text-sm font-medium text-gray-700">Top</label>
+          <input
+            type="number"
+            min="1"
+            max={rankings.length}
+            value={scheduleTopNInput}
+            onChange={(e) => setScheduleTopNInput(e.target.value)}
+            onBlur={() => {
+              const num = parseInt(scheduleTopNInput);
+              if (isNaN(num) || num < 1) {
+                setScheduleTopNInput("1");
+              } else if (num > rankings.length) {
+                setScheduleTopNInput(rankings.length.toString());
+              }
+            }}
+            className="w-20 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+          <button
+            onClick={sendBulkSchedulingEmails}
+            disabled={sendingScheduling}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 font-medium"
+          >
+            {sendingScheduling ? "Sending..." : "Schedule Meetings"}
           </button>
         </div>
       )}
@@ -337,6 +391,22 @@ export default function RankingsPage() {
                         className="text-violet-600 hover:underline font-medium"
                       >
                         Email
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Send scheduling invitation to ${entry.candidate_name || entry.candidate_email}?`)) return;
+                          try {
+                            await fetch(`${API_BASE_URL}/api/review/scheduling/${entry.invite_id}`, {
+                              method: "POST",
+                            });
+                            alert("Scheduling invitation sent!");
+                          } catch (err: any) {
+                            alert(`Failed: ${err.message}`);
+                          }
+                        }}
+                        className="text-blue-600 hover:underline font-medium"
+                      >
+                        Schedule
                       </button>
                     </div>
                   </td>

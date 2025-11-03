@@ -463,6 +463,100 @@ def update_rankings_order(
     return {"message": "Rankings updated successfully"}
 
 
+@router.post("/rankings/assessment/{assessment_id}/send-scheduling")
+def send_bulk_scheduling(
+    assessment_id: str,
+    top_n: int = Query(..., description="Number of top candidates to email"),
+    status: str | None = Query("submitted", description="Filter by status"),
+    db: Session = Depends(get_db)
+):
+    """
+    Send meeting scheduling links (Calendly) to the top N candidates in the rankings.
+    """
+    # Verify assessment exists
+    assessment = db.query(models.Assessment).get(assessment_id)
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    # Get Calendly link from settings
+    settings_row = db.query(models.Setting).filter(models.Setting.key == "calendly_link").first()
+    if not settings_row or not settings_row.value:
+        raise HTTPException(status_code=400, detail="Calendly link not configured in Settings")
+
+    calendly_link = settings_row.value
+
+    # Get top N candidates using the same ranking logic
+    query = (
+        db.query(
+            models.SubmissionScore,
+            models.AssessmentInvite,
+            models.Candidate
+        )
+        .join(models.AssessmentInvite, models.SubmissionScore.invite_id == models.AssessmentInvite.id)
+        .join(models.Candidate, models.AssessmentInvite.candidate_id == models.Candidate.id)
+        .filter(models.AssessmentInvite.assessment_id == assessment_id)
+    )
+
+    if status and status != "all":
+        query = query.filter(models.AssessmentInvite.status == status)
+
+    query = query.order_by(
+        models.SubmissionScore.manual_rank.asc().nullslast(),
+        desc(models.SubmissionScore.total_score)
+    )
+
+    results = query.limit(top_n).all()
+
+    if not results:
+        raise HTTPException(status_code=404, detail="No candidates found")
+
+    # Send emails with Calendly link
+    email_svc = EmailService()
+    sent_count = 0
+    failed_emails = []
+
+    for _, invite, candidate in results:
+        try:
+            subject = f"Interview Invitation - {assessment.title}"
+            body = f"""
+            <p>Hi {candidate.full_name or candidate.email},</p>
+
+            <p>Congratulations! We would like to schedule an interview with you regarding your submission for <strong>{assessment.title}</strong>.</p>
+
+            <p>Please select a time that works best for you by clicking the link below:</p>
+
+            <p><a href="{calendly_link}" style="background-color: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Schedule Interview</a></p>
+
+            <p>Or copy this link: {calendly_link}</p>
+
+            <p>We look forward to speaking with you!</p>
+            """
+
+            email_svc.send_email(
+                to=candidate.email,
+                subject=subject,
+                html=body,
+            )
+
+            sent_count += 1
+
+        except Exception as e:
+            failed_emails.append({
+                "email": candidate.email,
+                "name": candidate.full_name,
+                "error": str(e)
+            })
+
+    db.commit()
+
+    return {
+        "message": f"Scheduling emails sent to top {top_n} candidates",
+        "sent_count": sent_count,
+        "failed_count": len(failed_emails),
+        "failed_emails": failed_emails
+    }
+
+
 @router.post("/rankings/assessment/{assessment_id}/send-followup")
 def send_bulk_followup(
     assessment_id: str,

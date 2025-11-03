@@ -201,6 +201,72 @@ def set_followup_template(body: dict, db: Session = Depends(get_db)):
     db.refresh(row)
     return row
 
+@router.post("/scheduling/{invite_id}")
+def send_scheduling_email(invite_id: str, db: Session = Depends(get_db)):
+    """Send a scheduling invitation with Calendly link to a specific candidate"""
+    invite = db.query(models.AssessmentInvite).get(invite_id)
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    assessment = db.query(models.Assessment).get(invite.assessment_id)
+    candidate = db.query(models.Candidate).get(invite.candidate_id)
+
+    # Get Calendly link from settings
+    settings_row = db.query(Setting).filter(Setting.key == "calendly_link").first()
+    if not settings_row or not settings_row.value:
+        raise HTTPException(status_code=400, detail="Calendly link not configured in Settings")
+
+    calendly_link = settings_row.value
+
+    # Send email with Calendly link
+    email_svc = EmailService()
+    subject = f"Interview Invitation - {assessment.title}"
+    body = f"""
+    <p>Hi {candidate.full_name or candidate.email},</p>
+
+    <p>Congratulations! We would like to schedule an interview with you regarding your submission for <strong>{assessment.title}</strong>.</p>
+
+    <p>Please select a time that works best for you by clicking the link below:</p>
+
+    <p><a href="{calendly_link}" style="background-color: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Schedule Interview</a></p>
+
+    <p>Or copy this link: {calendly_link}</p>
+
+    <p>We look forward to speaking with you!</p>
+    """
+
+    email_svc.send_email(
+        to=candidate.email,
+        subject=subject,
+        html=body,
+    )
+
+    return {"status": "sent", "candidate_email": candidate.email}
+
+@router.get("/calendly-link", response_model=SettingOut)
+def get_calendly_link(db: Session = Depends(get_db)):
+    row = db.query(Setting).filter(Setting.key == "calendly_link").first()
+    if not row:
+        from uuid import uuid4
+        row = Setting(id=uuid4(), key="calendly_link", value="")
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    return row
+
+@router.put("/calendly-link", response_model=SettingOut)
+def set_calendly_link(body: dict, db: Session = Depends(get_db)):
+    row = db.query(Setting).filter(Setting.key == "calendly_link").first()
+    link = body.get("link", "")
+    if not row:
+        from uuid import uuid4
+        row = Setting(id=uuid4(), key="calendly_link", value=link)
+        db.add(row)
+    else:
+        row.value = link
+    db.commit()
+    db.refresh(row)
+    return row
+
 @router.get("/diff/{invite_id}", response_model=list[DiffFile])
 def get_diff(invite_id: str, db: Session = Depends(get_db)):
     invite = db.query(models.AssessmentInvite).get(invite_id)
