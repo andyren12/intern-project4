@@ -1,0 +1,215 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { gradingApi, RankingEntry } from "@/utils/grading-api";
+import Link from "next/link";
+
+export default function RankingsPage() {
+  const searchParams = useSearchParams();
+  const assessmentId = searchParams.get("assessmentId");
+
+  const [rankings, setRankings] = useState<RankingEntry[]>([]);
+  const [ungraded, setUngraded] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>("submitted");
+
+  useEffect(() => {
+    if (assessmentId) {
+      loadRankings();
+    }
+  }, [assessmentId, statusFilter]);
+
+  async function loadRankings() {
+    if (!assessmentId) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const [rankingsData, ungradedData] = await Promise.all([
+        gradingApi.getRankings(assessmentId, statusFilter),
+        gradingApi.getUngraded(assessmentId),
+      ]);
+      setRankings(rankingsData);
+      setUngraded(ungradedData);
+    } catch (err: any) {
+      setError(err?.message || "Failed to load rankings");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!assessmentId) {
+    return (
+      <main className="max-w-6xl mx-auto p-6">
+        <h1 className="text-3xl font-bold mb-4">Rankings</h1>
+        <p className="text-gray-600">
+          Please provide an <code className="bg-gray-100 px-2 py-1 rounded">assessmentId</code> query parameter.
+        </p>
+        <p className="mt-2 text-sm text-gray-500">
+          Example: <code className="bg-gray-100 px-2 py-1 rounded">/rankings?assessmentId=your-uuid</code>
+        </p>
+      </main>
+    );
+  }
+
+  return (
+    <main className="max-w-6xl mx-auto p-6">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold mb-2">Candidate Rankings</h1>
+        <p className="text-gray-600">Assessment ID: {assessmentId}</p>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded mb-6">
+          {error}
+        </div>
+      )}
+
+      <div className="mb-4 flex gap-4 items-center">
+        <label className="text-sm font-medium">Filter by status:</label>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">All</option>
+          <option value="submitted">Submitted</option>
+          <option value="started">Started</option>
+        </select>
+      </div>
+
+      {ungraded.length > 0 && (
+        <div className="bg-yellow-50 border border-yellow-300 text-yellow-800 px-4 py-3 rounded mb-6">
+          <div className="font-semibold">⚠ {ungraded.length} ungraded submission(s)</div>
+          <ul className="mt-2 text-sm space-y-1">
+            {ungraded.map((item) => (
+              <li key={item.invite_id}>
+                {item.candidate_name || item.candidate_email} -{" "}
+                <Link
+                  href={`/review?inviteId=${item.invite_id}`}
+                  className="text-blue-600 hover:underline"
+                >
+                  Grade now
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-center py-12 text-gray-500">Loading rankings...</div>
+      ) : rankings.length === 0 ? (
+        <div className="text-center py-12 text-gray-500">
+          No graded submissions yet.
+        </div>
+      ) : (
+        <div className="bg-white border border-gray-300 rounded-lg overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Rank</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Candidate</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Email</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Score</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Submitted</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {rankings.map((entry, index) => (
+                <tr key={entry.invite_id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`
+                          inline-flex items-center justify-center w-8 h-8 rounded-full font-bold
+                          ${index === 0 ? "bg-yellow-400 text-yellow-900" : ""}
+                          ${index === 1 ? "bg-gray-300 text-gray-900" : ""}
+                          ${index === 2 ? "bg-orange-400 text-orange-900" : ""}
+                          ${index > 2 ? "bg-gray-100 text-gray-700" : ""}
+                        `}
+                      >
+                        {index + 1}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                    {entry.candidate_name || "—"}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{entry.candidate_email}</td>
+                  <td className="px-4 py-3 text-right">
+                    <span className="text-lg font-bold text-gray-900">
+                      {Number(entry.total_score).toFixed(1)}
+                    </span>
+                    <span className="text-sm text-gray-500">/100</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`
+                        inline-block px-2 py-1 text-xs font-semibold rounded
+                        ${entry.status === "submitted" ? "bg-green-100 text-green-800" : ""}
+                        ${entry.status === "started" ? "bg-blue-100 text-blue-800" : ""}
+                        ${entry.status === "pending" ? "bg-gray-100 text-gray-800" : ""}
+                      `}
+                    >
+                      {entry.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600">
+                    {entry.submitted_at
+                      ? new Date(entry.submitted_at).toLocaleDateString()
+                      : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    <Link
+                      href={`/review?inviteId=${entry.invite_id}`}
+                      className="text-blue-600 hover:underline font-medium"
+                    >
+                      Review
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {rankings.length > 0 && (
+        <div className="mt-6 bg-gray-50 border border-gray-300 rounded-lg p-4">
+          <h3 className="font-semibold mb-2">Statistics</h3>
+          <div className="grid grid-cols-4 gap-4 text-sm">
+            <div>
+              <div className="text-gray-600">Total Graded</div>
+              <div className="text-2xl font-bold text-gray-900">{rankings.length}</div>
+            </div>
+            <div>
+              <div className="text-gray-600">Average Score</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {(
+                  rankings.reduce((sum, r) => sum + Number(r.total_score), 0) / rankings.length
+                ).toFixed(1)}
+              </div>
+            </div>
+            <div>
+              <div className="text-gray-600">Highest Score</div>
+              <div className="text-2xl font-bold text-green-600">
+                {Math.max(...rankings.map((r) => Number(r.total_score))).toFixed(1)}
+              </div>
+            </div>
+            <div>
+              <div className="text-gray-600">Lowest Score</div>
+              <div className="text-2xl font-bold text-red-600">
+                {Math.min(...rankings.map((r) => Number(r.total_score))).toFixed(1)}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+}

@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { api } from "@/utils/api";
+import { gradingApi, RubricCriterion } from "@/utils/grading-api";
+import RubricBuilder from "./RubricBuilder";
 
 export type Assessment = {
   id: string;
@@ -17,14 +19,53 @@ export type Assessment = {
 export default function ChallengeCreationForm({ onCreated }: { onCreated?: (a: Assessment) => void }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rubricCriteria, setRubricCriteria] = useState<RubricCriterion[]>([
+    {
+      name: "code_quality",
+      description: "Evaluate code readability, maintainability, proper naming conventions, and adherence to best practices",
+      weight: 0.34,
+      type: "automated",
+      scoring: "percentage",
+      max_score: 100
+    },
+    {
+      name: "design",
+      description: "Assess architecture decisions, code organization, separation of concerns, and scalability",
+      weight: 0.33,
+      type: "automated",
+      scoring: "percentage",
+      max_score: 100
+    },
+    {
+      name: "creativity",
+      description: "Evaluate innovative solutions, unique approaches, and problem-solving creativity",
+      weight: 0.33,
+      type: "automated",
+      scoring: "percentage",
+      max_score: 100
+    }
+  ]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
 
+    // Validate rubric criteria
+    if (rubricCriteria.length === 0) {
+      setError("Please add at least one grading criterion");
+      return;
+    }
+
+    const totalWeight = rubricCriteria.reduce((sum, c) => sum + c.weight, 0);
+    if (Math.abs(totalWeight - 1.0) > 0.01) {
+      setError(`Rubric weights must sum to 1.0 (currently ${totalWeight.toFixed(2)})`);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
+      // Create assessment
       const payload = {
         title: String(formData.get("title") || "").trim(),
         description: String(formData.get("description") || "").trim() || undefined,
@@ -34,6 +75,16 @@ export default function ChallengeCreationForm({ onCreated }: { onCreated?: (a: A
         complete_within_hours: Number(formData.get("complete_within_hours") || 48),
       };
       const created = await api.post<Assessment>("/api/assessments/", payload);
+
+      // Create rubric (required)
+      try {
+        await gradingApi.createRubric(created.id, rubricCriteria);
+      } catch (rubricError: any) {
+        setError(`Assessment created but rubric failed: ${rubricError?.message || "Unknown error"}`);
+        setLoading(false);
+        return;
+      }
+
       onCreated?.(created);
     } catch (e: any) {
       setError(e?.message || "Failed to create assessment");
@@ -83,28 +134,39 @@ export default function ChallengeCreationForm({ onCreated }: { onCreated?: (a: A
       <div className="flex gap-3">
         <label className="flex-1 flex flex-col gap-1">
           <div className="text-sm font-medium">Time to Start (hours)</div>
-          <input 
-            name="start_within_hours" 
-            type="number" 
-            defaultValue={72} 
-            min={1} 
+          <input
+            name="start_within_hours"
+            type="number"
+            defaultValue={72}
+            min={1}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
         </label>
         <label className="flex-1 flex flex-col gap-1">
           <div className="text-sm font-medium">Time to Complete (hours)</div>
-          <input 
-            name="complete_within_hours" 
-            type="number" 
-            defaultValue={48} 
-            min={1} 
+          <input
+            name="complete_within_hours"
+            type="number"
+            defaultValue={48}
+            min={1}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
         </label>
       </div>
-      <button 
-        type="submit" 
-        disabled={loading} 
+
+      <div className="border-t pt-4 mt-2">
+        <h4 className="text-sm font-medium mb-3">Grading Rubric (Required)</h4>
+        <div className="bg-gray-50 p-4 rounded-md">
+          <RubricBuilder
+            onCriteriaChange={setRubricCriteria}
+            initialCriteria={rubricCriteria}
+          />
+        </div>
+      </div>
+
+      <button
+        type="submit"
+        disabled={loading}
         className="bg-gray-900 hover:bg-gray-800 text-white py-2 px-3 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         {loading ? "Creating..." : "Create Assessment"}

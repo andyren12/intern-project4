@@ -118,9 +118,17 @@ export default function ChallengeDetailPage({
 
           {/* Submissions */}
           <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
-            <h2 className="text-lg font-medium mb-4">
-              Submissions ({invites.length})
-            </h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-medium">
+                Submissions ({invites.length})
+              </h2>
+              <a
+                href={`/rankings?assessmentId=${id}`}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium no-underline"
+              >
+                View Rankings
+              </a>
+            </div>
 
             <div className="flex gap-6 mb-4">
               {(["all", "pending", "started", "submitted"] as const).map(

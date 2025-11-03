@@ -1,0 +1,423 @@
+"""
+Grading API Routes - Handle rubrics, scoring, and rankings
+"""
+from __future__ import annotations
+
+from datetime import datetime
+from decimal import Decimal
+import uuid
+import os
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import desc
+
+from app.database import get_db
+from app import models
+from app.schemas import (
+    RubricCreate,
+    RubricOut,
+    SubmissionScoreCreate,
+    SubmissionScoreOut,
+    AIGradingRequest,
+    AIGradingResult,
+    RankingEntry,
+    CriterionScore,
+)
+from app.services.ai_grading_service import AIGradingService
+from app.services.github_service import GitHubService
+
+
+router = APIRouter(prefix="/grading", tags=["grading"])
+
+
+# ============================================================================
+# RUBRIC ENDPOINTS
+# ============================================================================
+
+@router.post("/rubrics", response_model=RubricOut, status_code=201)
+def create_rubric(payload: RubricCreate, db: Session = Depends(get_db)):
+    """Create or update grading rubric for an assessment"""
+
+    # Validate weights sum to 1.0
+    try:
+        payload.validate_weights()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Check if assessment exists
+    assessment = db.query(models.Assessment).get(str(payload.assessment_id))
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    # Check if rubric already exists
+    existing = db.query(models.AssessmentRubric).filter(
+        models.AssessmentRubric.assessment_id == payload.assessment_id
+    ).first()
+
+    if existing:
+        # Update existing
+        existing.criteria = [c.model_dump() for c in payload.criteria]
+        existing.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    # Create new
+    rubric = models.AssessmentRubric(
+        id=uuid.uuid4(),
+        assessment_id=payload.assessment_id,
+        criteria=[c.model_dump() for c in payload.criteria],
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(rubric)
+    db.commit()
+    db.refresh(rubric)
+    return rubric
+
+
+@router.get("/rubrics/assessment/{assessment_id}", response_model=RubricOut)
+def get_rubric(assessment_id: str, db: Session = Depends(get_db)):
+    """Get rubric for an assessment"""
+    rubric = db.query(models.AssessmentRubric).filter(
+        models.AssessmentRubric.assessment_id == assessment_id
+    ).first()
+
+    if not rubric:
+        raise HTTPException(status_code=404, detail="Rubric not found")
+
+    return rubric
+
+
+@router.delete("/rubrics/{rubric_id}", status_code=204)
+def delete_rubric(rubric_id: str, db: Session = Depends(get_db)):
+    """Delete a rubric"""
+    rubric = db.query(models.AssessmentRubric).get(rubric_id)
+    if not rubric:
+        raise HTTPException(status_code=404, detail="Rubric not found")
+
+    db.delete(rubric)
+    db.commit()
+    return None
+
+
+# ============================================================================
+# SCORING ENDPOINTS
+# ============================================================================
+
+@router.post("/scores", response_model=SubmissionScoreOut, status_code=201)
+def create_or_update_score(payload: SubmissionScoreCreate, db: Session = Depends(get_db)):
+    """Create or update submission score"""
+
+    # Check if invite exists
+    invite = db.query(models.AssessmentInvite).get(str(payload.invite_id))
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invite not found")
+
+    # Get rubric to calculate weighted total
+    rubric = db.query(models.AssessmentRubric).filter(
+        models.AssessmentRubric.assessment_id == invite.assessment_id
+    ).first()
+
+    if not rubric:
+        raise HTTPException(status_code=404, detail="No rubric defined for this assessment")
+
+    # Calculate weighted total score
+    total_score = calculate_weighted_score(
+        payload.criteria_scores,
+        rubric.criteria
+    )
+
+    # Check if score already exists
+    existing = db.query(models.SubmissionScore).filter(
+        models.SubmissionScore.invite_id == payload.invite_id
+    ).first()
+
+    # Convert CriterionScore objects to dict
+    criteria_scores_dict = {
+        name: score.model_dump() for name, score in payload.criteria_scores.items()
+    }
+
+    if existing:
+        # Update existing
+        existing.criteria_scores = criteria_scores_dict
+        existing.total_score = total_score
+        existing.graded_by = payload.graded_by
+        existing.graded_at = datetime.utcnow()
+        existing.notes = payload.notes
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    # Create new
+    score = models.SubmissionScore(
+        id=uuid.uuid4(),
+        invite_id=payload.invite_id,
+        criteria_scores=criteria_scores_dict,
+        total_score=total_score,
+        graded_by=payload.graded_by,
+        graded_at=datetime.utcnow(),
+        notes=payload.notes,
+    )
+    db.add(score)
+    db.commit()
+    db.refresh(score)
+    return score
+
+
+@router.get("/scores/invite/{invite_id}", response_model=SubmissionScoreOut)
+def get_score(invite_id: str, db: Session = Depends(get_db)):
+    """Get score for a submission"""
+    score = db.query(models.SubmissionScore).filter(
+        models.SubmissionScore.invite_id == invite_id
+    ).first()
+
+    if not score:
+        raise HTTPException(status_code=404, detail="Score not found")
+
+    return score
+
+
+@router.delete("/scores/{score_id}", status_code=204)
+def delete_score(score_id: str, db: Session = Depends(get_db)):
+    """Delete a score"""
+    score = db.query(models.SubmissionScore).get(score_id)
+    if not score:
+        raise HTTPException(status_code=404, detail="Score not found")
+
+    db.delete(score)
+    db.commit()
+    return None
+
+
+# ============================================================================
+# AI GRADING ENDPOINTS
+# ============================================================================
+
+@router.post("/ai-grade", response_model=AIGradingResult)
+def ai_grade_submission(payload: AIGradingRequest, db: Session = Depends(get_db)):
+    """Use AI to grade specific criteria of a submission"""
+
+    # Get invite and validate
+    invite = db.query(models.AssessmentInvite).get(str(payload.invite_id))
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invite not found")
+
+    if invite.status.value != "submitted":
+        raise HTTPException(status_code=400, detail="Can only grade submitted assessments")
+
+    # Get assessment
+    assessment = db.query(models.Assessment).get(str(invite.assessment_id))
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    # Get rubric
+    rubric = db.query(models.AssessmentRubric).filter(
+        models.AssessmentRubric.assessment_id == invite.assessment_id
+    ).first()
+
+    if not rubric:
+        raise HTTPException(status_code=404, detail="No rubric defined for this assessment")
+
+    # Get candidate repo
+    candidate_repo = db.query(models.CandidateRepo).filter(
+        models.CandidateRepo.invite_id == payload.invite_id
+    ).first()
+
+    if not candidate_repo:
+        raise HTTPException(status_code=404, detail="No candidate repo found")
+
+    # Get code diff and commit history from GitHub
+    try:
+        gh = GitHubService()
+
+        # Get diff between seed and submission
+        code_diff = gh.compare_commits(
+            candidate_repo.repo_full_name,
+            candidate_repo.pinned_main_sha,
+            "main"
+        )
+
+        # Get commit history
+        commit_history = gh.get_commit_history(candidate_repo.repo_full_name)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch code: {str(e)}")
+
+    # Initialize AI grading service
+    try:
+        ai_service = AIGradingService()
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    # Run AI grading
+    try:
+        result = ai_service.analyze_code_quality(
+            code_diff=code_diff,
+            commit_history=commit_history,
+            rubric_criteria=rubric.criteria,
+            criteria_to_grade=payload.criteria_to_grade,
+            model=payload.model,
+            assessment_title=assessment.title,
+            assessment_description=assessment.description,
+            assessment_instructions=assessment.instructions
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI grading failed: {str(e)}")
+
+    # Log the AI grading
+    log = models.AIGradingLog(
+        id=uuid.uuid4(),
+        invite_id=payload.invite_id,
+        model=result.model_used,
+        prompt_tokens=result.tokens_used // 2,  # Rough estimate
+        completion_tokens=result.tokens_used // 2,
+        criteria_analyzed=payload.criteria_to_grade,
+        raw_response={"reasoning": result.reasoning},
+        created_at=datetime.utcnow(),
+    )
+    db.add(log)
+    db.commit()
+
+    return result
+
+
+@router.post("/ai-grade/estimate-cost")
+def estimate_ai_grading_cost(invite_id: str, model: str = "gpt-4o-mini", db: Session = Depends(get_db)):
+    """Estimate the cost of AI grading for a submission"""
+
+    # Get candidate repo
+    candidate_repo = db.query(models.CandidateRepo).filter(
+        models.CandidateRepo.invite_id == invite_id
+    ).first()
+
+    if not candidate_repo:
+        raise HTTPException(status_code=404, detail="No candidate repo found")
+
+    try:
+        gh = GitHubService()
+        code_diff = gh.compare_commits(
+            candidate_repo.repo_full_name,
+            candidate_repo.pinned_main_sha,
+            "main"
+        )
+
+        ai_service = AIGradingService()
+        estimate = ai_service.estimate_cost(code_diff, model)
+
+        return estimate
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to estimate cost: {str(e)}")
+
+
+# ============================================================================
+# RANKINGS ENDPOINTS
+# ============================================================================
+
+@router.get("/rankings/assessment/{assessment_id}", response_model=list[RankingEntry])
+def get_assessment_rankings(
+    assessment_id: str,
+    db: Session = Depends(get_db),
+    status: str | None = Query(None, description="Filter by status: submitted, started, all")
+):
+    """Get ranked list of all submissions for an assessment"""
+
+    # Verify assessment exists
+    assessment = db.query(models.Assessment).get(assessment_id)
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    # Build query with joins
+    query = (
+        db.query(
+            models.SubmissionScore,
+            models.AssessmentInvite,
+            models.Candidate
+        )
+        .join(models.AssessmentInvite, models.SubmissionScore.invite_id == models.AssessmentInvite.id)
+        .join(models.Candidate, models.AssessmentInvite.candidate_id == models.Candidate.id)
+        .filter(models.AssessmentInvite.assessment_id == assessment_id)
+    )
+
+    # Apply status filter
+    if status and status != "all":
+        query = query.filter(models.AssessmentInvite.status == status)
+
+    # Order by score descending
+    query = query.order_by(desc(models.SubmissionScore.total_score))
+
+    results = query.all()
+
+    # Format response
+    rankings = []
+    for score, invite, candidate in results:
+        rankings.append(RankingEntry(
+            invite_id=invite.id,
+            candidate_id=candidate.id,
+            candidate_email=candidate.email,
+            candidate_name=candidate.full_name,
+            total_score=score.total_score,
+            graded_at=score.graded_at,
+            status=invite.status.value if hasattr(invite.status, "value") else str(invite.status),
+            submitted_at=invite.submitted_at,
+        ))
+
+    return rankings
+
+
+@router.get("/rankings/ungraded/{assessment_id}")
+def get_ungraded_submissions(assessment_id: str, db: Session = Depends(get_db)):
+    """Get list of submitted but ungraded submissions"""
+
+    # Get all submitted invites without scores
+    invites = (
+        db.query(models.AssessmentInvite)
+        .outerjoin(models.SubmissionScore, models.AssessmentInvite.id == models.SubmissionScore.invite_id)
+        .filter(
+            models.AssessmentInvite.assessment_id == assessment_id,
+            models.AssessmentInvite.status == "submitted",
+            models.SubmissionScore.id.is_(None)  # No score exists
+        )
+        .all()
+    )
+
+    results = []
+    for invite in invites:
+        candidate = db.query(models.Candidate).get(invite.candidate_id)
+        results.append({
+            "invite_id": invite.id,
+            "candidate_id": candidate.id,
+            "candidate_email": candidate.email,
+            "candidate_name": candidate.full_name,
+            "submitted_at": invite.submitted_at,
+        })
+
+    return results
+
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def calculate_weighted_score(
+    criteria_scores: dict[str, CriterionScore],
+    rubric_criteria: list[dict]
+) -> Decimal:
+    """Calculate weighted total score out of 100"""
+
+    total = 0.0
+
+    for criterion in rubric_criteria:
+        name = criterion["name"]
+        weight = criterion["weight"]
+
+        if name in criteria_scores:
+            score_data = criteria_scores[name]
+            # Normalize to 0-100 scale
+            normalized = (score_data.score / score_data.max_score) * 100
+            weighted = normalized * weight
+            total += weighted
+
+    return Decimal(str(round(total, 2)))

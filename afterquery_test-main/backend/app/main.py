@@ -22,7 +22,7 @@ def root():
     return {"message": "Backend is running 🚀"}
 
 # ⬇️ Import routers *after* CORS is set up
-from app.routes import example, assessments, invites, candidate, review, email
+from app.routes import example, assessments, invites, candidate, review, email, grading
 
 app.include_router(example.router, prefix="/api")
 app.include_router(assessments.router, prefix="/api")
@@ -30,6 +30,7 @@ app.include_router(invites.router, prefix="/api")
 app.include_router(candidate.router, prefix="/api")
 app.include_router(review.router, prefix="/api")
 app.include_router(email.router, prefix="/api")
+app.include_router(grading.router, prefix="/api")
 
 if __name__ == "__main__":
     import os

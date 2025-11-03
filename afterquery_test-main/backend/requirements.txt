@@ -7,3 +7,4 @@ psycopg2-binary
 email-validator
 python-dotenv
 resend
+openai

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { API_BASE_URL } from "@/utils/api";
+import ScoringPanel from "./ScoringPanel";
 
 export type ReviewData = {
   invite: { id: string; status: string; started_at?: string | null; submitted_at?: string | null };
@@ -261,6 +262,9 @@ export default function AdminReviewPanel({ data }: { data: ReviewData }) {
             <button type="submit" disabled={savingOverall || !overallText.trim()} className="px-4 py-2 rounded bg-gray-900 text-white font-semibold disabled:bg-gray-400">{savingOverall ? "Sending…" : "Send Feedback"}</button>
           </div>
         </form>
+      </section>
+      <section className="rounded bg-white p-4 shadow-sm border">
+        <ScoringPanel inviteId={invite.id} assessmentId={assessment.id} />
       </section>
     </div>
   );

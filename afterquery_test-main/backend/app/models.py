@@ -12,8 +12,10 @@ from sqlalchemy import (
     Boolean,
     Enum,
     ForeignKey,
+    Numeric,
+    ARRAY,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import declarative_base, relationship
 import enum
 
@@ -180,5 +182,61 @@ class ReviewInlineComment(Base):
     created_at = Column(DateTime(timezone=True), nullable=False)
 
     invite = relationship("AssessmentInvite", backref="inline_comments")
+
+
+class AssessmentRubric(Base):
+    __tablename__ = "assessment_rubrics"
+
+    id = Column(UUID(as_uuid=True), primary_key=True)
+    assessment_id = Column(UUID(as_uuid=True), ForeignKey("assessments.id", ondelete="CASCADE"), nullable=False, unique=True)
+    criteria = Column(JSONB, nullable=False)  # Array of {name, description, weight, type, scoring}
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False)
+
+    assessment = relationship("Assessment", backref="rubric", uselist=False)
+
+
+class SubmissionScore(Base):
+    __tablename__ = "submission_scores"
+
+    id = Column(UUID(as_uuid=True), primary_key=True)
+    invite_id = Column(UUID(as_uuid=True), ForeignKey("assessment_invites.id", ondelete="CASCADE"), nullable=False, unique=True)
+    criteria_scores = Column(JSONB, nullable=False)  # {criteria_name: {score, max_score, notes}, ...}
+    total_score = Column(Numeric(5, 2), nullable=False)  # Weighted total out of 100
+    graded_by = Column(Text)  # admin email or 'ai'
+    graded_at = Column(DateTime(timezone=True), nullable=False)
+    notes = Column(Text)
+
+    invite = relationship("AssessmentInvite", backref="score", uselist=False)
+
+
+class TestExecution(Base):
+    __tablename__ = "test_executions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True)
+    invite_id = Column(UUID(as_uuid=True), ForeignKey("assessment_invites.id", ondelete="CASCADE"), nullable=False)
+    tests_passed = Column(Integer, nullable=False, default=0)
+    tests_failed = Column(Integer, nullable=False, default=0)
+    tests_skipped = Column(Integer, nullable=False, default=0)
+    test_output = Column(JSONB)  # Detailed test results
+    execution_time_ms = Column(Integer)  # Total execution time
+    executed_at = Column(DateTime(timezone=True), nullable=False)
+
+    invite = relationship("AssessmentInvite", backref="test_executions")
+
+
+class AIGradingLog(Base):
+    __tablename__ = "ai_grading_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True)
+    invite_id = Column(UUID(as_uuid=True), ForeignKey("assessment_invites.id", ondelete="CASCADE"), nullable=False)
+    model = Column(Text, nullable=False)  # e.g., 'gpt-4o', 'gpt-4o-mini'
+    prompt_tokens = Column(Integer)
+    completion_tokens = Column(Integer)
+    criteria_analyzed = Column(ARRAY(Text))  # Which criteria were AI-graded
+    raw_response = Column(JSONB)  # Full AI response for debugging
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+    invite = relationship("AssessmentInvite", backref="ai_grading_logs")
 
 
