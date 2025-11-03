@@ -97,4 +97,9 @@ export const gradingApi = {
 
   updateRankingsOrder: (assessmentId: string, rankings: Array<{ invite_id: string; manual_rank: number | null }>) =>
     api.put<{ message: string }>(`/api/grading/rankings/assessment/${assessmentId}/reorder`, { rankings }),
+
+  sendBulkFollowup: (assessmentId: string, topN: number, status?: string) =>
+    api.post<{ message: string; sent_count: number; failed_count: number; failed_emails: any[] }>(
+      `/api/grading/rankings/assessment/${assessmentId}/send-followup?top_n=${topN}${status ? `&status=${status}` : ""}`,
+    ),
 };

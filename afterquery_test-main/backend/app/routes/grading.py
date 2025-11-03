@@ -27,6 +27,8 @@ from app.schemas import (
 )
 from app.services.ai_grading_service import AIGradingService
 from app.services.github_service import GitHubService
+from app.services.email_service import EmailService
+import json
 
 
 router = APIRouter(prefix="/grading", tags=["grading"])
@@ -459,6 +461,109 @@ def update_rankings_order(
     db.commit()
 
     return {"message": "Rankings updated successfully"}
+
+
+@router.post("/rankings/assessment/{assessment_id}/send-followup")
+def send_bulk_followup(
+    assessment_id: str,
+    top_n: int = Query(..., description="Number of top candidates to email"),
+    status: str | None = Query("submitted", description="Filter by status"),
+    db: Session = Depends(get_db)
+):
+    """
+    Send follow-up emails to the top N candidates in the rankings.
+    Uses the same template as individual follow-up emails from settings.
+    """
+    # Verify assessment exists
+    assessment = db.query(models.Assessment).get(assessment_id)
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    # Get top N candidates using the same ranking logic
+    query = (
+        db.query(
+            models.SubmissionScore,
+            models.AssessmentInvite,
+            models.Candidate
+        )
+        .join(models.AssessmentInvite, models.SubmissionScore.invite_id == models.AssessmentInvite.id)
+        .join(models.Candidate, models.AssessmentInvite.candidate_id == models.Candidate.id)
+        .filter(models.AssessmentInvite.assessment_id == assessment_id)
+    )
+
+    # Apply status filter
+    if status and status != "all":
+        query = query.filter(models.AssessmentInvite.status == status)
+
+    # Order by manual_rank first, then by total_score
+    query = query.order_by(
+        models.SubmissionScore.manual_rank.asc().nullslast(),
+        desc(models.SubmissionScore.total_score)
+    )
+
+    # Limit to top N
+    results = query.limit(top_n).all()
+
+    if not results:
+        raise HTTPException(status_code=404, detail="No candidates found")
+
+    # Get email template from settings
+    settings_row = db.query(models.Setting).filter(models.Setting.key == "followup_template").first()
+    default_subj = "Follow-Up Interview Invitation"
+    default_body = "We'd like to schedule a follow-up interview. Please reply with your availability."
+
+    if settings_row:
+        try:
+            parsed = json.loads(settings_row.value)
+            template_subject = parsed.get("subject", default_subj)
+            template_body = parsed.get("body", default_body)
+        except Exception:
+            template_subject = default_subj
+            template_body = default_body
+    else:
+        template_subject = default_subj
+        template_body = default_body
+
+    # Send emails and record history
+    email_svc = EmailService()
+    sent_count = 0
+    failed_emails = []
+
+    for score, invite, candidate in results:
+        try:
+            # Send email
+            email_svc.send_email(
+                to=candidate.email,
+                subject=template_subject,
+                html=template_body,
+            )
+
+            # Record in follow-up history
+            rec = models.FollowUpEmail(
+                id=uuid.uuid4(),
+                invite_id=invite.id,
+                sent_at=datetime.utcnow(),
+                template_subject=template_subject,
+                template_body=template_body,
+            )
+            db.add(rec)
+            sent_count += 1
+
+        except Exception as e:
+            failed_emails.append({
+                "email": candidate.email,
+                "name": candidate.full_name,
+                "error": str(e)
+            })
+
+    db.commit()
+
+    return {
+        "message": f"Follow-up emails sent to top {top_n} candidates",
+        "sent_count": sent_count,
+        "failed_count": len(failed_emails),
+        "failed_emails": failed_emails
+    }
 
 
 # ============================================================================

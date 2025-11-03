@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { gradingApi, RankingEntry } from "@/utils/grading-api";
 import Link from "next/link";
+import { API_BASE_URL } from "@/utils/api";
 
 export default function RankingsPage() {
   const searchParams = useSearchParams();
@@ -16,6 +17,8 @@ export default function RankingsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("submitted");
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [emailTopNInput, setEmailTopNInput] = useState("5");
+  const [sendingEmails, setSendingEmails] = useState(false);
 
   useEffect(() => {
     if (assessmentId) {
@@ -106,6 +109,33 @@ export default function RankingsPage() {
     }
   };
 
+  const sendBulkFollowupEmails = async () => {
+    if (!assessmentId) return;
+
+    const emailTopN = parseInt(emailTopNInput) || 1;
+    if (!confirm(`Send follow-up emails to the top ${emailTopN} candidate${emailTopN !== 1 ? 's' : ''}?`)) return;
+
+    setSendingEmails(true);
+    setError(null);
+    try {
+      const result = await gradingApi.sendBulkFollowup(assessmentId, emailTopN, statusFilter);
+
+      if (result.failed_count > 0) {
+        alert(
+          `Sent ${result.sent_count} emails successfully.\n` +
+          `Failed to send ${result.failed_count} emails.\n\n` +
+          `Failed recipients:\n${result.failed_emails.map((f) => `- ${f.email}: ${f.error}`).join("\n")}`
+        );
+      } else {
+        alert(`Successfully sent follow-up emails to top ${emailTopN} candidate${emailTopN !== 1 ? 's' : ''}!`);
+      }
+    } catch (err: any) {
+      setError(err?.message || "Failed to send follow-up emails");
+    } finally {
+      setSendingEmails(false);
+    }
+  };
+
   if (!assessmentId) {
     return (
       <main className="max-w-6xl mx-auto p-6">
@@ -134,7 +164,7 @@ export default function RankingsPage() {
       )}
 
       {rankings.length > 0 && (
-        <div className="mb-4 flex gap-3">
+        <div className="mb-4 flex gap-3 items-center">
           <button
             onClick={saveRankingsOrder}
             disabled={saving}
@@ -148,6 +178,31 @@ export default function RankingsPage() {
             className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Reset to Score Order
+          </button>
+          <div className="flex-1"></div>
+          <label className="text-sm font-medium text-gray-700">Top</label>
+          <input
+            type="number"
+            min="1"
+            max={rankings.length}
+            value={emailTopNInput}
+            onChange={(e) => setEmailTopNInput(e.target.value)}
+            onBlur={() => {
+              const num = parseInt(emailTopNInput);
+              if (isNaN(num) || num < 1) {
+                setEmailTopNInput("1");
+              } else if (num > rankings.length) {
+                setEmailTopNInput(rankings.length.toString());
+              }
+            }}
+            className="w-20 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+          />
+          <button
+            onClick={sendBulkFollowupEmails}
+            disabled={sendingEmails}
+            className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 disabled:opacity-50 font-medium"
+          >
+            {sendingEmails ? "Sending..." : "Send Follow-Up Emails"}
           </button>
         </div>
       )}
@@ -260,12 +315,30 @@ export default function RankingsPage() {
                       : "—"}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <Link
-                      href={`/review?inviteId=${entry.invite_id}`}
-                      className="text-blue-600 hover:underline font-medium"
-                    >
-                      Review
-                    </Link>
+                    <div className="flex gap-2">
+                      <Link
+                        href={`/review?inviteId=${entry.invite_id}`}
+                        className="text-blue-600 hover:underline font-medium"
+                      >
+                        Review
+                      </Link>
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Send follow-up email to ${entry.candidate_name || entry.candidate_email}?`)) return;
+                          try {
+                            await fetch(`${API_BASE_URL}/api/review/followup/${entry.invite_id}`, {
+                              method: "POST",
+                            });
+                            alert("Follow-up email sent!");
+                          } catch (err: any) {
+                            alert(`Failed: ${err.message}`);
+                          }
+                        }}
+                        className="text-violet-600 hover:underline font-medium"
+                      >
+                        Email
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -305,6 +378,7 @@ export default function RankingsPage() {
           </div>
         </div>
       )}
+
     </main>
   );
 }
