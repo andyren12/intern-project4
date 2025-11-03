@@ -195,4 +195,19 @@ class GitHubService:
                 })
             return result
 
+    def delete_repo(self, full_name: str) -> None:
+        """
+        Delete a GitHub repository.
+
+        Args:
+            full_name: Repository in format "owner/repo"
+
+        Raises:
+            httpx.HTTPStatusError: If the deletion fails
+        """
+        owner, repo = full_name.split("/")
+        with self._client() as c:
+            r = c.delete(f"/repos/{owner}/{repo}")
+            r.raise_for_status()
+
 

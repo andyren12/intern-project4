@@ -5,7 +5,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_, exists
+from sqlalchemy import or_, and_, exists, text
 
 from app.database import get_db
 from app import models
@@ -114,6 +114,69 @@ def unarchive_assessment(assessment_id: str, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(assessment)
     return assessment
+
+
+@router.delete("/{assessment_id}", status_code=204)
+def delete_assessment(
+    assessment_id: str,
+    delete_github_repos: bool = Query(True, description="Also delete candidate GitHub repos"),
+    db: Session = Depends(get_db)
+):
+    """
+    Permanently delete an assessment and all associated data.
+
+    This will delete:
+    - The assessment itself
+    - All invites/submissions
+    - All scores and AI grading logs
+    - All review comments
+    - All rubrics
+    - Optionally: All candidate GitHub repositories (recommended)
+
+    Note: The seed repository is NOT deleted as it may be reused.
+    """
+    assessment = db.query(models.Assessment).get(assessment_id)
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    # Optionally delete candidate repos from GitHub
+    if delete_github_repos:
+        try:
+            gh = GitHubService()
+
+            # Get all candidate repos for this assessment
+            candidate_repos = (
+                db.query(models.CandidateRepo)
+                .join(models.AssessmentInvite)
+                .filter(models.AssessmentInvite.assessment_id == assessment_id)
+                .all()
+            )
+
+            # Delete each repo from GitHub
+            for repo in candidate_repos:
+                if repo.repo_full_name:
+                    try:
+                        gh.delete_repo(repo.repo_full_name)
+                    except Exception as e:
+                        # Log but don't fail - repo might already be deleted
+                        print(f"Warning: Could not delete repo {repo.repo_full_name}: {str(e)}")
+        except Exception as e:
+            # Don't fail the deletion if GitHub cleanup fails
+            print(f"Warning: GitHub cleanup failed: {str(e)}")
+
+    # Delete the assessment - use raw SQL to let database CASCADE handle it
+    # This prevents SQLAlchemy ORM from trying to nullify foreign keys
+    assessment_id_to_delete = str(assessment.id)
+    db.expunge(assessment)  # Remove from session to avoid ORM interference
+
+    # Use parameterized SQL delete to let database CASCADE work properly
+    db.execute(
+        text("DELETE FROM assessments WHERE id = :assessment_id"),
+        {"assessment_id": assessment_id_to_delete}
+    )
+    db.commit()
+
+    return None
 
 
 @router.get("/{assessment_id}/invites")

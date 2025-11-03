@@ -167,18 +167,40 @@ export default function ChallengesPage() {
                           </button>
                         </>
                       ) : (
-                        <button
-                          onClick={async () => {
-                            await api.put<Assessment>(
-                              `/api/assessments/${a.id}/unarchive`
-                            );
-                            const updated = await fetchArchivedAssessments();
-                            setAssessments(updated);
-                          }}
-                          className="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm px-3 py-1.5 rounded-md border border-gray-300 cursor-pointer"
-                        >
-                          Unarchive
-                        </button>
+                        <>
+                          <button
+                            onClick={async () => {
+                              await api.put<Assessment>(
+                                `/api/assessments/${a.id}/unarchive`
+                              );
+                              const updated = await fetchArchivedAssessments();
+                              setAssessments(updated);
+                            }}
+                            className="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm px-3 py-1.5 rounded-md border border-gray-300 cursor-pointer"
+                          >
+                            Unarchive
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (
+                                window.confirm(
+                                  `Are you sure you want to permanently delete "${a.title}"?\n\nThis will delete:\n- All submissions and scores\n- All candidate repositories from GitHub\n- All review comments and AI grading logs\n\nThis action cannot be undone!`
+                                )
+                              ) {
+                                try {
+                                  await api.delete(`/api/assessments/${a.id}`);
+                                  const updated = await fetchArchivedAssessments();
+                                  setAssessments(updated);
+                                } catch (error: any) {
+                                  alert(`Failed to delete: ${error.message || 'Unknown error'}`);
+                                }
+                              }
+                            }}
+                            className="bg-red-600 hover:bg-red-700 text-white text-sm px-3 py-1.5 rounded-md border-none cursor-pointer"
+                          >
+                            Delete
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
