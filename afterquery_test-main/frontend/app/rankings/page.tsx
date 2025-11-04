@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { gradingApi, RankingEntry } from "@/utils/grading-api";
 import Link from "next/link";
@@ -39,7 +39,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-export default function RankingsPage() {
+function RankingsPageContent() {
   const searchParams = useSearchParams();
   const assessmentId = searchParams.get("assessmentId");
 
@@ -839,5 +839,13 @@ export default function RankingsPage() {
         </AlertDialogContent>
       </AlertDialog>
     </main>
+  );
+}
+
+export default function RankingsPage() {
+  return (
+    <Suspense fallback={<div className="py-8 text-center">Loading...</div>}>
+      <RankingsPageContent />
+    </Suspense>
   );
 }
