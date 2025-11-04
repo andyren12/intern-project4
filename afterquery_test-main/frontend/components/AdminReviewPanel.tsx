@@ -260,40 +260,20 @@ export default function AdminReviewPanel({ data }: { data: ReviewData }) {
                 </p>
               ) : (
                 diffFiles.map((f) => (
-                  <Card key={f.filename} className="mb-3 border-muted">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-mono text-blue-700">
-                        {f.filename}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-xs text-muted-foreground mb-1">
-                        +{f.additions} -{f.deletions} • {f.status}
-                      </p>
-                      {f.patch ? (
-                        <pre className="bg-muted p-2 rounded text-xs overflow-auto">
-                          {f.patch}
-                        </pre>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">
-                          No patch available.
-                        </p>
-                      )}
-                      <InlineCommentsSection
-                        inviteId={invite.id}
-                        filename={f.filename}
-                        inlineComments={inlineComments}
-                        inlineLoading={inlineLoading}
-                        refresh={() =>
-                          fetchData(
-                            `${API_BASE_URL}/api/review/inline-comments/${invite.id}`,
-                            setInlineComments,
-                            setInlineLoading
-                          )
-                        }
-                      />
-                    </CardContent>
-                  </Card>
+                  <DiffFileView
+                    key={f.filename}
+                    file={f}
+                    inviteId={invite.id}
+                    inlineComments={inlineComments}
+                    inlineLoading={inlineLoading}
+                    refresh={() =>
+                      fetchData(
+                        `${API_BASE_URL}/api/review/inline-comments/${invite.id}`,
+                        setInlineComments,
+                        setInlineLoading
+                      )
+                    }
+                  />
                 ))
               )}
             </CardContent>
@@ -381,106 +361,181 @@ export default function AdminReviewPanel({ data }: { data: ReviewData }) {
   );
 }
 
-/* ---------------- Inline Comment Section ---------------- */
-function InlineCommentsSection({
+/* ---------------- Diff File View ---------------- */
+function DiffFileView({
+  file,
   inviteId,
-  filename,
   inlineComments,
   inlineLoading,
   refresh,
 }: {
+  file: any;
   inviteId: string;
-  filename: string;
   inlineComments: any[];
   inlineLoading: boolean;
   refresh: () => void;
 }) {
-  return (
-    <div className="space-y-2">
-      <h4 className="font-medium text-sm">Inline Comments</h4>
-      {inlineLoading ? (
-        <p className="text-xs text-muted-foreground">Loading…</p>
-      ) : (
-        <ul className="text-xs space-y-1">
-          {inlineComments.filter((c) => c.file_path === filename).length ===
-          0 ? (
-            <li className="text-muted-foreground">No comments yet.</li>
-          ) : (
-            inlineComments
-              .filter((c) => c.file_path === filename)
-              .map((c) => (
-                <li key={c.id} className="flex justify-between">
-                  <span>{c.message}</span>
-                  <span className="text-muted-foreground">
-                    L{c.line} • {new Date(c.created_at).toLocaleString()}
-                  </span>
-                </li>
-              ))
-          )}
-        </ul>
-      )}
-      <InlineCommentForm
-        inviteId={inviteId}
-        filePath={filename}
-        onAdded={refresh}
-      />
-    </div>
-  );
-}
-
-/* ---------------- Inline Comment Form ---------------- */
-function InlineCommentForm({
-  inviteId,
-  filePath,
-  onAdded,
-}: {
-  inviteId: string;
-  filePath: string;
-  onAdded: () => void;
-}) {
-  const [message, setMessage] = useState("");
-  const [line, setLine] = useState("");
+  const [activeLine, setActiveLine] = useState<number | null>(null);
+  const [newComment, setNewComment] = useState("");
   const [saving, setSaving] = useState(false);
 
-  async function submitComment(e: React.FormEvent) {
-    e.preventDefault();
-    if (!message.trim()) return;
+  const lines = file.patch ? file.patch.split("\n") : [];
+
+  async function handleAddComment(lineNumber: number) {
+    if (!newComment.trim()) return;
     setSaving(true);
     await fetch(`${API_BASE_URL}/api/review/inline-comments/${inviteId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        file_path: filePath,
-        line: line ? Number(line) : null,
-        message,
+        file_path: file.filename,
+        line: lineNumber,
+        message: newComment.trim(),
         author_email: "admin@yourdomain.com",
         author_name: "Admin",
       }),
     });
-    setMessage("");
-    setLine("");
+    setNewComment("");
+    setActiveLine(null);
     setSaving(false);
-    onAdded();
+    refresh();
   }
 
+  // Group all comments by line for summary
+  const groupedComments = inlineComments
+    .filter((c) => c.file_path === file.filename)
+    .reduce((acc: Record<number, any[]>, c) => {
+      if (!acc[c.line]) acc[c.line] = [];
+      acc[c.line].push(c);
+      return acc;
+    }, {});
+
   return (
-    <form onSubmit={submitComment} className="flex items-center gap-2">
-      <Input
-        type="number"
-        placeholder="Line"
-        value={line}
-        onChange={(e) => setLine(e.target.value)}
-        className="w-20 text-xs"
-      />
-      <Input
-        placeholder="Add comment..."
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
-        className="text-xs"
-      />
-      <Button type="submit" size="sm" disabled={saving || !message.trim()}>
-        {saving ? "Adding…" : "Comment"}
-      </Button>
-    </form>
+    <Card className="mb-3 border-muted">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-mono text-blue-700">
+          {file.filename}
+        </CardTitle>
+      </CardHeader>
+
+      <CardContent>
+        <p className="text-xs text-muted-foreground mb-2">
+          +{file.additions} -{file.deletions} • {file.status}
+        </p>
+
+        {file.patch ? (
+          <div className="bg-muted rounded text-xs font-mono overflow-auto border">
+            {lines.map((line: string, index: number) => {
+              const lineNumber = index + 1;
+              const lineComments = inlineComments.filter(
+                (c) => c.file_path === file.filename && c.line === lineNumber
+              );
+
+              const isAddition = line.startsWith("+");
+              const isDeletion = line.startsWith("-");
+              const bg = isAddition
+                ? "bg-green-50 hover:bg-green-100"
+                : isDeletion
+                ? "bg-red-50 hover:bg-red-100"
+                : "hover:bg-accent";
+
+              return (
+                <div
+                  key={index}
+                  className={`group border-b border-muted/40 relative`}
+                >
+                  <div
+                    className={`flex items-start gap-2 cursor-pointer ${bg} transition-colors px-2 py-0.5`}
+                    onClick={() =>
+                      setActiveLine(
+                        activeLine === lineNumber ? null : lineNumber
+                      )
+                    }
+                  >
+                    <span className="text-muted-foreground select-none w-10 text-right pr-2">
+                      {lineNumber}
+                    </span>
+                    <pre className="whitespace-pre-wrap flex-1">
+                      {line || " "}
+                    </pre>
+                  </div>
+
+                  {/* Inline comments under line */}
+                  {lineComments.length > 0 && (
+                    <div className="pl-12 pb-1 space-y-1">
+                      {lineComments.map((c) => (
+                        <div
+                          key={c.id}
+                          className="text-xs text-gray-700 bg-white border-l-2 border-blue-400 pl-2 py-0.5 rounded-sm"
+                        >
+                          💬 {c.message}{" "}
+                          <span className="text-muted-foreground text-[10px] ml-1">
+                            ({new Date(c.created_at).toLocaleString()})
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Inline add comment box */}
+                  {activeLine === lineNumber && (
+                    <div className="pl-12 py-2 flex items-center gap-2 bg-background border-t border-muted">
+                      <Input
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        placeholder={`Comment on line ${lineNumber}...`}
+                        className="text-xs flex-1"
+                        autoFocus
+                      />
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={saving || !newComment.trim()}
+                        onClick={() => handleAddComment(lineNumber)}
+                      >
+                        {saving ? "..." : "Add"}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">No patch available.</p>
+        )}
+
+        {/* --- Comment Summary Section --- */}
+        {!inlineLoading && Object.keys(groupedComments).length > 0 && (
+          <div className="mt-4 border-t pt-3">
+            <h4 className="text-sm font-medium mb-2 flex items-center gap-1">
+              📝 Comment Summary
+              <span className="text-xs text-muted-foreground font-normal">
+                ({Object.keys(groupedComments).length} lines)
+              </span>
+            </h4>
+            <ul className="text-xs space-y-2">
+              {Object.entries(groupedComments).map(([line, comments]) => (
+                <li key={line} className="border-l-2 border-muted pl-2">
+                  <span className="text-blue-700 font-semibold">
+                    Line {line}:
+                  </span>
+                  <ul className="pl-4 list-disc text-gray-700">
+                    {(comments as any[]).map((c) => (
+                      <li key={c.id}>
+                        {c.message}{" "}
+                        <span className="text-muted-foreground text-[10px] ml-1">
+                          ({new Date(c.created_at).toLocaleTimeString()})
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
