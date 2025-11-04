@@ -42,6 +42,7 @@ class Assessment(Base):
     complete_within_hours = Column(Integer, nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False)
     archived = Column(Boolean, nullable=False, default=False)
+    calendly_link = Column(Text)  # Optional assessment-specific Calendly scheduling link
 
     seed_repo = relationship("SeedRepo", back_populates="assessment", uselist=False)
     invites = relationship("AssessmentInvite", back_populates="assessment")

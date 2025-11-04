@@ -14,6 +14,7 @@ class AssessmentCreate(BaseModel):
     seed_repo_url: HttpUrl
     start_within_hours: int
     complete_within_hours: int
+    calendly_link: str | None = None
 
 
 class AssessmentOut(BaseModel):
@@ -25,6 +26,7 @@ class AssessmentOut(BaseModel):
     start_within_hours: int
     complete_within_hours: int
     created_at: datetime
+    calendly_link: str | None = None
 
     class Config:
         from_attributes = True

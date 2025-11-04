@@ -478,12 +478,13 @@ def send_bulk_scheduling(
     if not assessment:
         raise HTTPException(status_code=404, detail="Assessment not found")
 
-    # Get Calendly link from settings
-    settings_row = db.query(models.Setting).filter(models.Setting.key == "calendly_link").first()
-    if not settings_row or not settings_row.value:
-        raise HTTPException(status_code=400, detail="Calendly link not configured in Settings")
-
-    calendly_link = settings_row.value
+    # Get Calendly link - use assessment-specific if available, otherwise default from settings
+    calendly_link = assessment.calendly_link
+    if not calendly_link:
+        settings_row = db.query(models.Setting).filter(models.Setting.key == "calendly_link").first()
+        if not settings_row or not settings_row.value:
+            raise HTTPException(status_code=400, detail="Calendly link not configured. Please set a default link in Settings or an assessment-specific link.")
+        calendly_link = settings_row.value
 
     # Get top N candidates using the same ranking logic
     query = (

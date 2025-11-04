@@ -14,6 +14,7 @@ export type Assessment = {
   start_within_hours: number;
   complete_within_hours: number;
   created_at: string;
+  calendly_link?: string | null;
 };
 
 export default function ChallengeCreationForm({ onCreated }: { onCreated?: (a: Assessment) => void }) {
@@ -73,6 +74,7 @@ export default function ChallengeCreationForm({ onCreated }: { onCreated?: (a: A
         seed_repo_url: String(formData.get("seed_repo_url") || "").trim(),
         start_within_hours: Number(formData.get("start_within_hours") || 72),
         complete_within_hours: Number(formData.get("complete_within_hours") || 48),
+        calendly_link: String(formData.get("calendly_link") || "").trim() || undefined,
       };
       const created = await api.post<Assessment>("/api/assessments/", payload);
 
@@ -125,11 +127,23 @@ export default function ChallengeCreationForm({ onCreated }: { onCreated?: (a: A
       </label>
       <label className="flex flex-col gap-1">
         <div className="text-sm font-medium">Instructions</div>
-        <textarea 
-          name="instructions" 
-          rows={4} 
+        <textarea
+          name="instructions"
+          rows={4}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
         />
+      </label>
+      <label className="flex flex-col gap-1">
+        <div className="text-sm font-medium">Calendly Scheduling Link (Optional)</div>
+        <input
+          name="calendly_link"
+          type="url"
+          placeholder="https://calendly.com/your-name/assessment-name"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+        <div className="text-xs text-gray-500">
+          Optional: Set a specific Calendly link for this assessment. If not provided, the default link from Settings will be used.
+        </div>
       </label>
       <div className="flex gap-3">
         <label className="flex-1 flex flex-col gap-1">

@@ -210,12 +210,13 @@ def send_scheduling_email(invite_id: str, db: Session = Depends(get_db)):
     assessment = db.query(models.Assessment).get(invite.assessment_id)
     candidate = db.query(models.Candidate).get(invite.candidate_id)
 
-    # Get Calendly link from settings
-    settings_row = db.query(Setting).filter(Setting.key == "calendly_link").first()
-    if not settings_row or not settings_row.value:
-        raise HTTPException(status_code=400, detail="Calendly link not configured in Settings")
-
-    calendly_link = settings_row.value
+    # Get Calendly link - use assessment-specific if available, otherwise default from settings
+    calendly_link = assessment.calendly_link
+    if not calendly_link:
+        settings_row = db.query(Setting).filter(Setting.key == "calendly_link").first()
+        if not settings_row or not settings_row.value:
+            raise HTTPException(status_code=400, detail="Calendly link not configured. Please set a default link in Settings or an assessment-specific link.")
+        calendly_link = settings_row.value
 
     # Send email with Calendly link
     email_svc = EmailService()

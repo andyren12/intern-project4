@@ -38,6 +38,7 @@ def create_assessment(payload: AssessmentCreate, db: Session = Depends(get_db)):
         complete_within_hours=payload.complete_within_hours,
         created_at=datetime.utcnow(),
         archived=False,
+        calendly_link=payload.calendly_link,
     )
     db.add(assessment)
     # ensure seed repo row exists with default branch main and store the validated SHA
@@ -110,6 +111,20 @@ def unarchive_assessment(assessment_id: str, db: Session = Depends(get_db)):
     if not assessment:
         raise HTTPException(status_code=404, detail="Assessment not found")
     assessment.archived = False
+    db.add(assessment)
+    db.commit()
+    db.refresh(assessment)
+    return assessment
+
+
+@router.put("/{assessment_id}/calendly-link", response_model=AssessmentOut)
+def update_assessment_calendly_link(assessment_id: str, body: dict, db: Session = Depends(get_db)):
+    """Update the Calendly scheduling link for a specific assessment"""
+    assessment = db.query(models.Assessment).get(assessment_id)
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    assessment.calendly_link = body.get("calendly_link")
     db.add(assessment)
     db.commit()
     db.refresh(assessment)

@@ -133,9 +133,9 @@ export default function SettingsPage() {
       </section>
 
       <section className="rounded bg-white p-4 shadow-sm border mt-6">
-        <h2 className="text-lg font-semibold mb-3">Calendly Scheduling Link</h2>
+        <h2 className="text-lg font-semibold mb-3">Default Calendly Scheduling Link</h2>
         <p className="text-sm text-gray-600 mb-4">
-          Add your Calendly scheduling link here. This will be used when sending interview invitations from the rankings page.
+          Default Calendly link used for all assessments. You can override this with assessment-specific links on the Challenges page.
         </p>
         {calendlyMessage ? (
           <div className={`mb-3 text-sm ${calendlyMessage.includes('Failed') ? 'text-red-700' : 'text-emerald-700'}`}>{calendlyMessage}</div>

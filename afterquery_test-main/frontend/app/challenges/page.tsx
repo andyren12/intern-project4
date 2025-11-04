@@ -24,6 +24,8 @@ export default function ChallengesPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [inviteModalAssessment, setInviteModalAssessment] =
     useState<Assessment | null>(null);
+  const [editingCalendlyId, setEditingCalendlyId] = useState<string | null>(null);
+  const [calendlyEditValue, setCalendlyEditValue] = useState("");
 
   // Fetch assessments whenever the active tab changes
   useEffect(() => {
@@ -35,6 +37,31 @@ export default function ChallengesPage() {
       .then(setAssessments)
       .catch(() => setAssessments([]));
   }, [activeTab]);
+
+  const startEditingCalendly = (assessment: Assessment) => {
+    setEditingCalendlyId(assessment.id);
+    setCalendlyEditValue(assessment.calendly_link || "");
+  };
+
+  const saveCalendlyLink = async (assessmentId: string) => {
+    try {
+      const updated = await api.put<Assessment>(
+        `/api/assessments/${assessmentId}/calendly-link`,
+        { calendly_link: calendlyEditValue }
+      );
+      setAssessments((prev) =>
+        prev.map((a) => (a.id === assessmentId ? updated : a))
+      );
+      setEditingCalendlyId(null);
+    } catch (error: any) {
+      alert(`Failed to save: ${error.message || "Unknown error"}`);
+    }
+  };
+
+  const cancelEditingCalendly = () => {
+    setEditingCalendlyId(null);
+    setCalendlyEditValue("");
+  };
 
   return (
     <main>
@@ -140,8 +167,51 @@ export default function ChallengesPage() {
                       >
                         {a.title}
                       </a>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-gray-500 mb-2">
                         {a.seed_repo_url}
+                      </div>
+                      <div className="text-xs text-gray-600 mt-2">
+                        {editingCalendlyId === a.id ? (
+                          <div className="flex gap-2 items-center">
+                            <span className="font-medium">Calendly:</span>
+                            <input
+                              type="url"
+                              value={calendlyEditValue}
+                              onChange={(e) => setCalendlyEditValue(e.target.value)}
+                              placeholder="https://calendly.com/..."
+                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-xs"
+                            />
+                            <button
+                              onClick={() => saveCalendlyLink(a.id)}
+                              className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-2 py-1 rounded border-none cursor-pointer"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={cancelEditingCalendly}
+                              className="bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs px-2 py-1 rounded border-none cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2 items-center">
+                            <span className="font-medium">Calendly:</span>
+                            {a.calendly_link ? (
+                              <span className="text-blue-600">{a.calendly_link}</span>
+                            ) : (
+                              <span className="italic text-gray-400">Using default from Settings</span>
+                            )}
+                            {activeTab === "available" && (
+                              <button
+                                onClick={() => startEditingCalendly(a)}
+                                className="text-blue-600 hover:text-blue-700 text-xs underline bg-transparent border-none cursor-pointer"
+                              >
+                                Edit
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
