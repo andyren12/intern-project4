@@ -43,6 +43,9 @@ class Assessment(Base):
     created_at = Column(DateTime(timezone=True), nullable=False)
     archived = Column(Boolean, nullable=False, default=False)
     calendly_link = Column(Text)  # Optional assessment-specific Calendly scheduling link
+    followup_subject = Column(Text)  # Optional custom follow-up email subject
+    followup_body = Column(Text)  # Optional custom follow-up email body
+    next_stage_assessment_id = Column(UUID(as_uuid=True), ForeignKey("assessments.id", ondelete="SET NULL"))  # Optional next round challenge
 
     seed_repo = relationship("SeedRepo", back_populates="assessment", uselist=False)
     invites = relationship("AssessmentInvite", back_populates="assessment")

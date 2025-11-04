@@ -131,31 +131,55 @@ def send_followup_email(invite_id: str, body: dict = {}, db: Session = Depends(g
     assessment = db.query(models.Assessment).get(invite.assessment_id)
     candidate = db.query(models.Candidate).get(invite.candidate_id)
 
-    # Get template (prefer passed-in, else settings, else fallback)
+    # Get template (priority: passed-in body > assessment-specific > global settings > fallback)
     template_subject = body.get("subject")
     template_body = body.get("body")
+
+    # If not provided in body, check assessment-specific template
     if not template_subject or not template_body:
-        settings_row = db.query(Setting).filter(Setting.key == "followup_template").first()
-        default_subj = "Follow-Up Interview Invitation"
-        default_body = "We'd like to schedule a follow-up interview. Please reply with your availability."
-        if settings_row:
-            # stored as {"subject": s, "body": b}
-            try:
-                parsed = json.loads(settings_row.value)
-                template_subject = template_subject or parsed.get("subject", default_subj)
-                template_body = template_body or parsed.get("body", default_body)
-            except Exception:
+        if assessment.followup_subject and assessment.followup_body:
+            template_subject = template_subject or assessment.followup_subject
+            template_body = template_body or assessment.followup_body
+        else:
+            # Fall back to global settings
+            settings_row = db.query(Setting).filter(Setting.key == "followup_template").first()
+            default_subj = "Follow-Up Interview Invitation"
+            default_body = "We'd like to schedule a follow-up interview. Please reply with your availability."
+            if settings_row:
+                # stored as {"subject": s, "body": b}
+                try:
+                    parsed = json.loads(settings_row.value)
+                    template_subject = template_subject or parsed.get("subject", default_subj)
+                    template_body = template_body or parsed.get("body", default_body)
+                except Exception:
+                    template_subject = template_subject or default_subj
+                    template_body = template_body or default_body
+            else:
                 template_subject = template_subject or default_subj
                 template_body = template_body or default_body
-        else:
-            template_subject = template_subject or default_subj
-            template_body = template_body or default_body
-    # Send email
+    # Replace candidate name wildcard
+    candidate_name = candidate.full_name or candidate.email
+    personalized_subject = template_subject.replace("{candidate_name}", candidate_name)
+    personalized_body = template_body.replace("{candidate_name}", candidate_name)
+
+    # If there's a next stage assessment, append info to email body
+    next_stage_info = ""
+    if assessment.next_stage_assessment_id:
+        next_stage = db.query(models.Assessment).get(assessment.next_stage_assessment_id)
+        if next_stage:
+            next_stage_info = f"""
+            <hr style="margin: 20px 0;">
+            <h3>Next Round: {next_stage.title}</h3>
+            <p><strong>Seed Repository:</strong> <a href="{next_stage.seed_repo_url}">{next_stage.seed_repo_url}</a></p>
+            {f'<p>{next_stage.description}</p>' if next_stage.description else ''}
+            """
+
+    # Send email with next stage info appended if available
     email_svc = EmailService()
     email_svc.send_email(
         to=candidate.email,
-        subject=template_subject,
-        html=template_body,
+        subject=personalized_subject,
+        html=personalized_body + next_stage_info,
     )
     # Store history
     rec = FollowUpEmail(

@@ -4,17 +4,22 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { gradingApi, RankingEntry } from "@/utils/grading-api";
 import Link from "next/link";
-import { API_BASE_URL } from "@/utils/api";
+import { API_BASE_URL, api } from "@/utils/api";
 import { toast } from "sonner";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,6 +54,13 @@ export default function RankingsPage() {
   const [sendingEmails, setSendingEmails] = useState(false);
   const [scheduleTopNInput, setScheduleTopNInput] = useState("5");
   const [sendingScheduling, setSendingScheduling] = useState(false);
+  const [followupSubject, setFollowupSubject] = useState("");
+  const [followupBody, setFollowupBody] = useState("");
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [assessment, setAssessment] = useState<any>(null);
+  const [availableAssessments, setAvailableAssessments] = useState<any[]>([]);
+  const [nextStageId, setNextStageId] = useState<string>("none");
+  const [includeNextStage, setIncludeNextStage] = useState(false);
 
   // Confirmation dialog state
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -66,8 +78,35 @@ export default function RankingsPage() {
   useEffect(() => {
     if (assessmentId) {
       loadRankings();
+      loadAssessment();
+      loadAvailableAssessments();
     }
   }, [assessmentId, statusFilter]);
+
+  async function loadAssessment() {
+    if (!assessmentId) return;
+    try {
+      const data = await api.get<any>(`/api/assessments/${assessmentId}`);
+      setAssessment(data);
+      setFollowupSubject(data.followup_subject || "");
+      setFollowupBody(data.followup_body || "");
+      // Transform null to "none" for Select component
+      const hasNextStage = Boolean(data.next_stage_assessment_id);
+      setNextStageId(data.next_stage_assessment_id || "none");
+      setIncludeNextStage(hasNextStage);
+    } catch (err) {
+      console.error("Failed to load assessment:", err);
+    }
+  }
+
+  async function loadAvailableAssessments() {
+    try {
+      const data = await api.get<any[]>("/api/assessments/?status=available");
+      setAvailableAssessments(data);
+    } catch (err) {
+      console.error("Failed to load available assessments:", err);
+    }
+  }
 
   async function loadRankings() {
     if (!assessmentId) return;
@@ -136,7 +175,8 @@ export default function RankingsPage() {
     setConfirmDialog({
       open: true,
       title: "Reset Rankings Order",
-      description: "Reset to automatic score-based ranking? This will remove your manual ordering.",
+      description:
+        "Reset to automatic score-based ranking? This will remove your manual ordering.",
       onConfirm: resetRankingsOrder,
     });
   };
@@ -264,6 +304,33 @@ export default function RankingsPage() {
       setError(err?.message || "Failed to send scheduling invitations");
     } finally {
       setSendingScheduling(false);
+    }
+  };
+
+  const saveFollowupTemplate = async () => {
+    if (!assessmentId) return;
+
+    setSavingTemplate(true);
+    try {
+      // Save follow-up template
+      await api.put(`/api/assessments/${assessmentId}/followup-template`, {
+        followup_subject: followupSubject.trim() || null,
+        followup_body: followupBody.trim() || null,
+      });
+
+      // Save next stage (only if checkbox is checked, otherwise clear it)
+      const nextStageIdToSave =
+        includeNextStage && nextStageId !== "none" ? nextStageId : null;
+      await api.put(`/api/assessments/${assessmentId}/next-stage`, {
+        next_stage_assessment_id: nextStageIdToSave,
+      });
+
+      toast.success("Follow-up settings saved!");
+      await loadAssessment(); // Reload to get updated data
+    } catch (err: any) {
+      toast.error(`Failed to save: ${err.message || "Unknown error"}`);
+    } finally {
+      setSavingTemplate(false);
     }
   };
 
@@ -415,7 +482,10 @@ export default function RankingsPage() {
                               entry.candidate_name || entry.candidate_email
                             }?`,
                             onConfirm: async () => {
-                              setConfirmDialog({ ...confirmDialog, open: false });
+                              setConfirmDialog({
+                                ...confirmDialog,
+                                open: false,
+                              });
                               try {
                                 await fetch(
                                   `${API_BASE_URL}/api/review/followup/${entry.invite_id}`,
@@ -444,7 +514,10 @@ export default function RankingsPage() {
                               entry.candidate_name || entry.candidate_email
                             }?`,
                             onConfirm: async () => {
-                              setConfirmDialog({ ...confirmDialog, open: false });
+                              setConfirmDialog({
+                                ...confirmDialog,
+                                open: false,
+                              });
                               try {
                                 await fetch(
                                   `${API_BASE_URL}/api/review/scheduling/${entry.invite_id}`,
@@ -502,7 +575,9 @@ export default function RankingsPage() {
           <CardContent>
             <div className="flex flex-wrap gap-4 items-end">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Send Follow-Up Emails</label>
+                <label className="text-sm font-medium">
+                  Send Follow-Up Emails
+                </label>
                 <div className="flex gap-2 items-center">
                   <span className="text-sm text-muted-foreground">Top</span>
                   <Input
@@ -570,6 +645,126 @@ export default function RankingsPage() {
       {rankings.length > 0 && (
         <Card>
           <CardHeader>
+            <CardTitle>Follow-Up Email Settings</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Set a custom follow-up email template for this challenge. If
+                  not set, the default template from Settings will be used.
+                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="followup-subject">Email Subject</Label>
+                  <Input
+                    id="followup-subject"
+                    value={followupSubject}
+                    onChange={(e) => setFollowupSubject(e.target.value)}
+                    placeholder="Follow-Up Interview Invitation"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="followup-body">Email Body (HTML)</Label>
+                  <Textarea
+                    id="followup-body"
+                    value={followupBody}
+                    onChange={(e) => setFollowupBody(e.target.value)}
+                    placeholder="We'd like to schedule a follow-up interview..."
+                    rows={6}
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Use{" "}
+                    <code className="bg-muted px-1 py-0.5 rounded">
+                      {"{candidate_name}"}
+                    </code>{" "}
+                    to insert the candidate's name
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t pt-4 space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="include-next-stage"
+                    checked={includeNextStage}
+                    onCheckedChange={(checked) =>
+                      setIncludeNextStage(checked as boolean)
+                    }
+                  />
+                  <Label
+                    htmlFor="include-next-stage"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Include next round challenge in follow-up emails
+                  </Label>
+                </div>
+
+                {includeNextStage && (
+                  <div className="space-y-2 pl-6">
+                    <p className="text-sm text-muted-foreground">
+                      When candidates receive a follow-up email, they'll also
+                      get information about the next assessment.
+                    </p>
+                    <div className="space-y-2">
+                      <Label htmlFor="next-stage">
+                        Select Next Round Challenge *
+                      </Label>
+                      <Select
+                        value={nextStageId}
+                        onValueChange={setNextStageId}
+                      >
+                        <SelectTrigger id="next-stage">
+                          <SelectValue placeholder="Select a challenge..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {availableAssessments
+                            .filter((a) => a.id !== assessmentId)
+                            .map((a) => (
+                              <SelectItem key={a.id} value={a.id}>
+                                {a.title}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={saveFollowupTemplate}
+                  disabled={
+                    savingTemplate ||
+                    (includeNextStage && nextStageId === "none")
+                  }
+                  size="sm"
+                >
+                  {savingTemplate ? "Saving..." : "Save Settings"}
+                </Button>
+                <Button
+                  onClick={() => {
+                    setFollowupSubject("");
+                    setFollowupBody("");
+                    setIncludeNextStage(false);
+                    setNextStageId("none");
+                  }}
+                  variant="outline"
+                  size="sm"
+                >
+                  Clear All
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {rankings.length > 0 && (
+        <Card>
+          <CardHeader>
             <CardTitle>Statistics</CardTitle>
           </CardHeader>
           <CardContent>
@@ -618,14 +813,23 @@ export default function RankingsPage() {
         </Card>
       )}
 
-      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog({ ...confirmDialog, open })}>
+      <AlertDialog
+        open={confirmDialog.open}
+        onOpenChange={(open) => setConfirmDialog({ ...confirmDialog, open })}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{confirmDialog.title}</AlertDialogTitle>
-            <AlertDialogDescription>{confirmDialog.description}</AlertDialogDescription>
+            <AlertDialogDescription>
+              {confirmDialog.description}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setConfirmDialog({ ...confirmDialog, open: false })}>
+            <AlertDialogCancel
+              onClick={() =>
+                setConfirmDialog({ ...confirmDialog, open: false })
+              }
+            >
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction onClick={confirmDialog.onConfirm}>

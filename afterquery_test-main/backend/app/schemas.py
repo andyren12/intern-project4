@@ -27,6 +27,9 @@ class AssessmentOut(BaseModel):
     complete_within_hours: int
     created_at: datetime
     calendly_link: str | None = None
+    followup_subject: str | None = None
+    followup_body: str | None = None
+    next_stage_assessment_id: UUID | None = None
 
     class Config:
         from_attributes = True

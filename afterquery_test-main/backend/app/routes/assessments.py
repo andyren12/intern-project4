@@ -131,6 +131,43 @@ def update_assessment_calendly_link(assessment_id: str, body: dict, db: Session 
     return assessment
 
 
+@router.put("/{assessment_id}/followup-template", response_model=AssessmentOut)
+def update_assessment_followup_template(assessment_id: str, body: dict, db: Session = Depends(get_db)):
+    """Update the custom follow-up email template for a specific assessment"""
+    assessment = db.query(models.Assessment).get(assessment_id)
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    assessment.followup_subject = body.get("followup_subject")
+    assessment.followup_body = body.get("followup_body")
+    db.add(assessment)
+    db.commit()
+    db.refresh(assessment)
+    return assessment
+
+
+@router.put("/{assessment_id}/next-stage", response_model=AssessmentOut)
+def update_assessment_next_stage(assessment_id: str, body: dict, db: Session = Depends(get_db)):
+    """Update the next stage assessment for a specific assessment"""
+    assessment = db.query(models.Assessment).get(assessment_id)
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    next_stage_id = body.get("next_stage_assessment_id")
+
+    # Validate next stage assessment exists if provided
+    if next_stage_id:
+        next_stage = db.query(models.Assessment).get(next_stage_id)
+        if not next_stage:
+            raise HTTPException(status_code=404, detail="Next stage assessment not found")
+
+    assessment.next_stage_assessment_id = next_stage_id
+    db.add(assessment)
+    db.commit()
+    db.refresh(assessment)
+    return assessment
+
+
 @router.delete("/{assessment_id}", status_code=204)
 def delete_assessment(
     assessment_id: str,

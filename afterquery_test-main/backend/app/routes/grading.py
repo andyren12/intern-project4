@@ -602,22 +602,40 @@ def send_bulk_followup(
     if not results:
         raise HTTPException(status_code=404, detail="No candidates found")
 
-    # Get email template from settings
-    settings_row = db.query(models.Setting).filter(models.Setting.key == "followup_template").first()
+    # Get email template (priority: assessment-specific > global settings > fallback)
     default_subj = "Follow-Up Interview Invitation"
     default_body = "We'd like to schedule a follow-up interview. Please reply with your availability."
 
-    if settings_row:
-        try:
-            parsed = json.loads(settings_row.value)
-            template_subject = parsed.get("subject", default_subj)
-            template_body = parsed.get("body", default_body)
-        except Exception:
+    # Check for assessment-specific template first
+    if assessment.followup_subject and assessment.followup_body:
+        template_subject = assessment.followup_subject
+        template_body = assessment.followup_body
+    else:
+        # Fall back to global settings
+        settings_row = db.query(models.Setting).filter(models.Setting.key == "followup_template").first()
+        if settings_row:
+            try:
+                parsed = json.loads(settings_row.value)
+                template_subject = parsed.get("subject", default_subj)
+                template_body = parsed.get("body", default_body)
+            except Exception:
+                template_subject = default_subj
+                template_body = default_body
+        else:
             template_subject = default_subj
             template_body = default_body
-    else:
-        template_subject = default_subj
-        template_body = default_body
+
+    # Check for next stage assessment info
+    next_stage_info = ""
+    if assessment.next_stage_assessment_id:
+        next_stage = db.query(models.Assessment).get(assessment.next_stage_assessment_id)
+        if next_stage:
+            next_stage_info = f"""
+            <hr style="margin: 20px 0;">
+            <h3>Next Round: {next_stage.title}</h3>
+            <p><strong>Seed Repository:</strong> <a href="{next_stage.seed_repo_url}">{next_stage.seed_repo_url}</a></p>
+            {f'<p>{next_stage.description}</p>' if next_stage.description else ''}
+            """
 
     # Send emails and record history
     email_svc = EmailService()
@@ -626,11 +644,16 @@ def send_bulk_followup(
 
     for score, invite, candidate in results:
         try:
-            # Send email
+            # Replace candidate name wildcard for personalization
+            candidate_name = candidate.full_name or candidate.email
+            personalized_subject = template_subject.replace("{candidate_name}", candidate_name)
+            personalized_body = template_body.replace("{candidate_name}", candidate_name)
+
+            # Send email with next stage info appended if available
             email_svc.send_email(
                 to=candidate.email,
-                subject=template_subject,
-                html=template_body,
+                subject=personalized_subject,
+                html=personalized_body + next_stage_info,
             )
 
             # Record in follow-up history
