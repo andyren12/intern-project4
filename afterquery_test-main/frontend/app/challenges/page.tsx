@@ -10,8 +10,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 async function fetchAvailableAssessments(): Promise<Assessment[]> {
   return api.get<Assessment[]>("/api/assessments/?status=available");
@@ -30,6 +41,8 @@ export default function ChallengesPage() {
     useState<Assessment | null>(null);
   const [editingCalendlyId, setEditingCalendlyId] = useState<string | null>(null);
   const [calendlyEditValue, setCalendlyEditValue] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [assessmentToDelete, setAssessmentToDelete] = useState<Assessment | null>(null);
 
   // Fetch both lists on mount
   useEffect(() => {
@@ -61,14 +74,35 @@ export default function ChallengesPage() {
         prev.map((a) => (a.id === assessmentId ? updated : a))
       );
       setEditingCalendlyId(null);
+      toast.success("Calendly link updated successfully");
     } catch (error: any) {
-      alert(`Failed to save: ${error.message || "Unknown error"}`);
+      toast.error(`Failed to save: ${error.message || "Unknown error"}`);
     }
   };
 
   const cancelEditingCalendly = () => {
     setEditingCalendlyId(null);
     setCalendlyEditValue("");
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!assessmentToDelete) return;
+
+    // Remove from archived list
+    setArchivedAssessments(prev => prev.filter(item => item.id !== assessmentToDelete.id));
+    setDeleteDialogOpen(false);
+
+    try {
+      await api.delete(`/api/assessments/${assessmentToDelete.id}`);
+      toast.success(`Successfully deleted "${assessmentToDelete.title}"`);
+    } catch (error: any) {
+      toast.error(`Failed to delete: ${error.message || 'Unknown error'}`);
+      // Reload archived list if delete failed
+      const archived = await fetchArchivedAssessments();
+      setArchivedAssessments(archived);
+    } finally {
+      setAssessmentToDelete(null);
+    }
   };
 
   // Get the current list based on active tab
@@ -267,23 +301,9 @@ export default function ChallengesPage() {
                               Unarchive
                             </Button>
                             <Button
-                              onClick={async () => {
-                                if (
-                                  window.confirm(
-                                    `Are you sure you want to permanently delete "${a.title}"?\n\nThis will delete:\n- All submissions and scores\n- All candidate repositories from GitHub\n- All review comments and AI grading logs\n\nThis action cannot be undone!`
-                                  )
-                                ) {
-                                  // Remove from archived list
-                                  setArchivedAssessments(prev => prev.filter(item => item.id !== a.id));
-                                  try {
-                                    await api.delete(`/api/assessments/${a.id}`);
-                                  } catch (error: any) {
-                                    alert(`Failed to delete: ${error.message || 'Unknown error'}`);
-                                    // Reload archived list if delete failed
-                                    const archived = await fetchArchivedAssessments();
-                                    setArchivedAssessments(archived);
-                                  }
-                                }
+                              onClick={() => {
+                                setAssessmentToDelete(a);
+                                setDeleteDialogOpen(true);
                               }}
                               variant="destructive"
                               size="sm"
@@ -312,6 +332,42 @@ export default function ChallengesPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Challenge</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                Are you sure you want to permanently delete{" "}
+                <strong>&quot;{assessmentToDelete?.title}&quot;</strong>?
+              </p>
+              <div className="text-sm">
+                <p className="font-medium mb-1">This will delete:</p>
+                <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
+                  <li>All submissions and scores</li>
+                  <li>All candidate repositories from GitHub</li>
+                  <li>All review comments and AI grading logs</li>
+                </ul>
+              </div>
+              <p className="font-semibold text-destructive">
+                This action cannot be undone!
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setAssessmentToDelete(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }
