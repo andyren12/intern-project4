@@ -3,10 +3,11 @@ Grading API Routes - Handle rubrics, scoring, and rankings
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import uuid
 import os
+import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
@@ -625,17 +626,10 @@ def send_bulk_followup(
             template_subject = default_subj
             template_body = default_body
 
-    # Check for next stage assessment info
-    next_stage_info = ""
+    # Get next stage assessment if configured
+    next_stage = None
     if assessment.next_stage_assessment_id:
         next_stage = db.query(models.Assessment).get(assessment.next_stage_assessment_id)
-        if next_stage:
-            next_stage_info = f"""
-            <hr style="margin: 20px 0;">
-            <h3>Next Round: {next_stage.title}</h3>
-            <p><strong>Seed Repository:</strong> <a href="{next_stage.seed_repo_url}">{next_stage.seed_repo_url}</a></p>
-            {f'<p>{next_stage.description}</p>' if next_stage.description else ''}
-            """
 
     # Send emails and record history
     email_svc = EmailService()
@@ -648,6 +642,44 @@ def send_bulk_followup(
             candidate_name = candidate.full_name or candidate.email
             personalized_subject = template_subject.replace("{candidate_name}", candidate_name)
             personalized_body = template_body.replace("{candidate_name}", candidate_name)
+
+            # Create next stage invite if configured
+            next_stage_info = ""
+            if next_stage:
+                # Check if invite already exists for this candidate and next stage
+                existing_next_invite = db.query(models.AssessmentInvite).filter(
+                    models.AssessmentInvite.assessment_id == next_stage.id,
+                    models.AssessmentInvite.candidate_id == candidate.id
+                ).first()
+
+                if not existing_next_invite:
+                    # Create new invite for next stage
+                    start_deadline = datetime.now(timezone.utc) + timedelta(hours=next_stage.start_within_hours)
+                    next_invite = models.AssessmentInvite(
+                        id=uuid.uuid4(),
+                        assessment_id=next_stage.id,
+                        candidate_id=candidate.id,
+                        status=models.InviteStatus.pending,
+                        start_deadline_at=start_deadline,
+                        start_url_slug=secrets.token_urlsafe(10).lower(),
+                        created_at=datetime.now(timezone.utc),
+                    )
+                    db.add(next_invite)
+                    db.flush()  # Flush to get the next_invite ID without committing
+                else:
+                    next_invite = existing_next_invite
+
+                # Generate start link
+                public_base = os.getenv("PUBLIC_APP_BASE_URL", "http://localhost:3000")
+                next_start_link = f"{public_base}/candidate/{next_invite.start_url_slug}"
+
+                next_stage_info = f"""
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e5e7eb;">
+                <h2 style="font-size: 20px; font-weight: bold; margin: 20px 0 10px 0;">Next Round Assessment</h2>
+                <p>You have been invited to complete the assessment <strong>{next_stage.title}</strong>.</p>
+                <p>Please start here: <a href="{next_start_link}" style="color: #2563eb; text-decoration: none;">{next_start_link}</a></p>
+                <p>Good luck!</p>
+                """
 
             # Send email with next stage info appended if available
             email_svc.send_email(
