@@ -2,31 +2,68 @@
 
 import "./globals.css";
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isCandidate = pathname?.startsWith("/candidate");
 
+  const navItems = [
+    { href: "/challenges", label: "Challenges" },
+    { href: "/assignments", label: "Assignments" },
+  ];
+
   return (
     <html lang="en">
-      <body className="font-sans antialiased m-0">
-        <div className="w-full bg-gray-50">
+      <body className="font-sans antialiased">
+        <div className="min-h-screen bg-background">
           {isCandidate ? (
-            <h3 className="bg-white-500 text-center py-3 w-full text-lg">Follow the instructions to complete the assessment</h3>
+            <div className="bg-blue-50 border-b border-blue-200">
+              <div className="container mx-auto px-4 py-4">
+                <p className="text-center text-blue-900 font-medium">
+                  Follow the instructions to complete the assessment
+                </p>
+              </div>
+            </div>
           ) : (
-            <header className="bg-gray-700 py-3 w-full">
-              <div className="max-w-4xl mx-auto px-6">
-                <nav className="flex gap-6">
-                  <a href="/challenges" className="text-white no-underline text-sm hover:text-gray-200">Challenges</a>
-                  <a href="/assignments" className="text-white no-underline text-sm hover:text-gray-200">Assignments</a>
-                  <a href="/settings" className="text-white no-underline text-sm hover:text-gray-200 ml-auto">Settings</a>
+            <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+              <div className="container mx-auto px-4">
+                <nav className="flex h-14 items-center justify-between">
+                  <div className="flex items-center gap-6">
+                    <Link href="/" className="flex items-center space-x-2">
+                      <span className="font-bold text-xl">AfterQuery</span>
+                    </Link>
+                    <div className="hidden md:flex gap-1">
+                      {navItems.map((item) => (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className={`inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2 ${
+                            pathname === item.href
+                              ? "bg-accent text-accent-foreground"
+                              : "text-muted-foreground"
+                          }`}
+                        >
+                          {item.label}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href="/settings"
+                      className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2 text-muted-foreground"
+                    >
+                      Settings
+                    </Link>
+                  </div>
                 </nav>
               </div>
             </header>
           )}
-          <div className="max-w-4xl mx-auto p-6">
+          <main className="container mx-auto px-4">
             {children}
-          </div>
+          </main>
         </div>
       </body>
     </html>

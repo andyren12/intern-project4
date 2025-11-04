@@ -2,6 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/utils/api";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import Link from "next/link";
 
 type Candidate = {
   id: string;
@@ -73,201 +79,211 @@ export default function AssignmentsPage() {
   }, [invites, activeTab]);
 
   return (
-    <main>
-      <h1 className="text-3xl font-semibold mb-6 text-gray-800">Assignments</h1>
-
-      <div className="flex gap-6 mb-4">
-        {(["pending", "started", "submitted", "all", "archived"] as const).map(
-          (tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`bg-transparent border-none pb-2 text-sm cursor-pointer transition-all underline ${
-                activeTab === tab
-                  ? "text-blue-600 font-medium border-b-2 border-blue-600"
-                  : "text-gray-500 font-normal border-b-2 border-transparent"
-              }`}
-            >
-              {tab[0].toUpperCase() + tab.slice(1)}
-            </button>
-          )
-        )}
+    <main className="py-8 space-y-6">
+      <div className="mb-8">
+        <h1 className="text-4xl font-bold tracking-tight mb-2">Assignments</h1>
+        <p className="text-muted-foreground">
+          Track all candidate assignments and submissions
+        </p>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
-        {sorted.length === 0 ? (
-          <div className="text-sm text-gray-500">No assignments.</div>
-        ) : (
-          <ul className="list-none p-0">
-            {sorted.map((inv) => (
-              <li
-                key={inv.id}
-                className="mb-4 p-4 border border-gray-200 rounded-md hover:border-gray-300 transition-colors"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="font-semibold mb-1">
-                      {inv.candidate.full_name || inv.candidate.email}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {inv.candidate.email}
-                    </div>
-                    <div className="mt-2 text-sm">
-                      Challenge:{" "}
-                      <span className="font-medium">
-                        {inv.assessment.title}
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {inv.assessment.seed_repo_url}
-                    </div>
-                    <div className="mt-2 grid grid-cols-2 gap-3 text-xs text-gray-600">
-                      <div>
-                        Invited: {new Date(inv.created_at).toLocaleString()}
-                      </div>
-                      <div>
-                        Start by:{" "}
-                        {inv.start_deadline_at
-                          ? new Date(inv.start_deadline_at).toLocaleString()
-                          : "—"}
-                      </div>
-                      <div>
-                        Started:{" "}
-                        {inv.started_at
-                          ? new Date(inv.started_at).toLocaleString()
-                          : "—"}
-                      </div>
-                      <div>
-                        Complete by:{" "}
-                        {inv.complete_deadline_at
-                          ? new Date(inv.complete_deadline_at).toLocaleString()
-                          : "—"}
-                      </div>
-                      {inv.submitted_at ? (
+      <Tabs defaultValue="pending" value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
+        <TabsList className="mb-4">
+          <TabsTrigger value="pending">Pending</TabsTrigger>
+          <TabsTrigger value="started">Started</TabsTrigger>
+          <TabsTrigger value="submitted">Submitted</TabsTrigger>
+          <TabsTrigger value="all">All</TabsTrigger>
+          <TabsTrigger value="archived">Archived</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value={activeTab}>
+          {sorted.length === 0 ? (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center py-10 text-muted-foreground">
+                  No assignments in this category.
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {sorted.map((inv) => (
+                <Card key={inv.id} className="hover:shadow-md transition-shadow">
+                  <CardContent className="pt-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 space-y-3">
                         <div>
-                          Submitted:{" "}
-                          {new Date(inv.submitted_at).toLocaleString()}
+                          <h3 className="font-semibold text-lg">
+                            {inv.candidate.full_name || inv.candidate.email}
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            {inv.candidate.email}
+                          </p>
                         </div>
-                      ) : null}
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium">
+                            Challenge: {inv.assessment.title}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {inv.assessment.seed_repo_url}
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
+                          <div>
+                            <span className="font-medium">Invited:</span>{" "}
+                            {new Date(inv.created_at).toLocaleString()}
+                          </div>
+                          <div>
+                            <span className="font-medium">Start by:</span>{" "}
+                            {inv.start_deadline_at
+                              ? new Date(inv.start_deadline_at).toLocaleString()
+                              : "—"}
+                          </div>
+                          <div>
+                            <span className="font-medium">Started:</span>{" "}
+                            {inv.started_at
+                              ? new Date(inv.started_at).toLocaleString()
+                              : "—"}
+                          </div>
+                          <div>
+                            <span className="font-medium">Complete by:</span>{" "}
+                            {inv.complete_deadline_at
+                              ? new Date(inv.complete_deadline_at).toLocaleString()
+                              : "—"}
+                          </div>
+                          {inv.submitted_at && (
+                            <div className="col-span-2">
+                              <span className="font-medium">Submitted:</span>{" "}
+                              {new Date(inv.submitted_at).toLocaleString()}
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <Badge
+                            variant={
+                              inv.status === "submitted"
+                                ? "default"
+                                : inv.status === "started"
+                                ? "secondary"
+                                : "outline"
+                            }
+                            className="capitalize"
+                          >
+                            {inv.status}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        {inv.status === "submitted" ? (
+                          <Button asChild size="sm">
+                            <Link href={`/review?inviteId=${inv.id}`}>
+                              Review
+                            </Link>
+                          </Button>
+                        ) : inv.status === "started" ? (
+                          <Button asChild variant="secondary" size="sm">
+                            <Link href={`/review?inviteId=${inv.id}`}>
+                              View Progress
+                            </Link>
+                          </Button>
+                        ) : (
+                          <Button
+                            onClick={() => setModalInvite(inv)}
+                            variant="outline"
+                            size="sm"
+                          >
+                            View Details
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                    <div className="mt-2 text-sm">
-                      Status:{" "}
-                      <span className="font-medium capitalize">
-                        {inv.status}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {inv.status === "submitted" ? (
-                      <a
-                        href={`/review?inviteId=${inv.id}`}
-                        className="bg-purple-600 hover:bg-purple-700 text-white text-sm px-3 py-1.5 rounded-md no-underline"
-                      >
-                        Review
-                      </a>
-                    ) : inv.status === "started" ? (
-                      <a
-                        href={`/review?inviteId=${inv.id}`}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-3 py-1.5 rounded-md no-underline"
-                      >
-                        View Progress
-                      </a>
-                    ) : (
-                      <button
-                        onClick={() => setModalInvite(inv)}
-                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm px-3 py-1.5 rounded-md border border-gray-300 cursor-pointer"
-                      >
-                        View Details
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {modalInvite && (
-        <div
-          className="fixed inset-0 bg-black/40 flex items-center justify-center p-4"
-          onClick={() => setModalInvite(null)}
-        >
-          <div
-            className="bg-white rounded-md p-5 max-w-xl w-full"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-lg font-semibold">Assignment Details</h3>
-              <button
-                onClick={() => setModalInvite(null)}
-                className="text-gray-500"
-              >
-                ×
-              </button>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-            <div className="space-y-2 text-sm">
-              <div>
-                <span className="font-medium">Candidate:</span>{" "}
-                {modalInvite.candidate.full_name || "—"} (
-                {modalInvite.candidate.email})
-              </div>
-              <div>
-                <span className="font-medium">Challenge:</span>{" "}
-                {modalInvite.assessment.title}
-              </div>
-              <div className="text-xs text-gray-500">
-                {modalInvite.assessment.seed_repo_url}
-              </div>
-              <div className="grid grid-cols-2 gap-3 mt-3 text-gray-700">
+          )}
+        </TabsContent>
+      </Tabs>
+
+      <Dialog open={!!modalInvite} onOpenChange={(open) => !open && setModalInvite(null)}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Assignment Details</DialogTitle>
+          </DialogHeader>
+          {modalInvite && (
+            <div className="space-y-4">
+              <div className="space-y-2 text-sm">
                 <div>
-                  Invited: {new Date(modalInvite.created_at).toLocaleString()}
+                  <span className="font-medium">Candidate:</span>{" "}
+                  {modalInvite.candidate.full_name || "—"} (
+                  {modalInvite.candidate.email})
                 </div>
                 <div>
-                  Start by:{" "}
+                  <span className="font-medium">Challenge:</span>{" "}
+                  {modalInvite.assessment.title}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {modalInvite.assessment.seed_repo_url}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
+                <div>
+                  <span className="font-medium text-foreground">Invited:</span>{" "}
+                  {new Date(modalInvite.created_at).toLocaleString()}
+                </div>
+                <div>
+                  <span className="font-medium text-foreground">Start by:</span>{" "}
                   {modalInvite.start_deadline_at
                     ? new Date(modalInvite.start_deadline_at).toLocaleString()
                     : "—"}
                 </div>
                 <div>
-                  Started:{" "}
+                  <span className="font-medium text-foreground">Started:</span>{" "}
                   {modalInvite.started_at
                     ? new Date(modalInvite.started_at).toLocaleString()
                     : "—"}
                 </div>
                 <div>
-                  Complete by:{" "}
+                  <span className="font-medium text-foreground">Complete by:</span>{" "}
                   {modalInvite.complete_deadline_at
-                    ? new Date(
-                        modalInvite.complete_deadline_at
-                      ).toLocaleString()
+                    ? new Date(modalInvite.complete_deadline_at).toLocaleString()
                     : "—"}
                 </div>
-                <div>
-                  Submitted:{" "}
+                <div className="col-span-2">
+                  <span className="font-medium text-foreground">Submitted:</span>{" "}
                   {modalInvite.submitted_at
                     ? new Date(modalInvite.submitted_at).toLocaleString()
                     : "—"}
                 </div>
               </div>
               <div>
-                Status:{" "}
-                <span className="capitalize font-medium">
+                <span className="font-medium">Status:</span>{" "}
+                <Badge
+                  variant={
+                    modalInvite.status === "submitted"
+                      ? "default"
+                      : modalInvite.status === "started"
+                      ? "secondary"
+                      : "outline"
+                  }
+                  className="capitalize"
+                >
                   {modalInvite.status}
-                </span>
+                </Badge>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  onClick={() => setModalInvite(null)}
+                  variant="outline"
+                  size="sm"
+                >
+                  Close
+                </Button>
               </div>
             </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={() => setModalInvite(null)}
-                className="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm px-3 py-1.5 rounded-md border border-gray-300 cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

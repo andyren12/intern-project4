@@ -4,6 +4,11 @@ import { useState } from "react";
 import { api } from "@/utils/api";
 import { gradingApi, RubricCriterion } from "@/utils/grading-api";
 import RubricBuilder from "./RubricBuilder";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export type Assessment = {
   id: string;
@@ -15,6 +20,7 @@ export type Assessment = {
   complete_within_hours: number;
   created_at: string;
   calendly_link?: string | null;
+  archived?: boolean;
 };
 
 export default function ChallengeCreationForm({ onCreated }: { onCreated?: (a: Assessment) => void }) {
@@ -96,81 +102,92 @@ export default function ChallengeCreationForm({ onCreated }: { onCreated?: (a: A
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-3 max-w-2xl">
-      <h3 className="m-0 text-xl font-semibold mb-2">Create Assessment</h3>
-      {error ? <div className="text-red-700 text-sm py-1">{error}</div> : null}
-      <label className="flex flex-col gap-1">
-        <div className="text-sm font-medium">Title</div>
-        <input 
-          name="title" 
-          placeholder="e.g., Full-Stack Take-Home" 
-          required 
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="space-y-2">
+        <Label htmlFor="title">Title</Label>
+        <Input
+          id="title"
+          name="title"
+          placeholder="e.g., Full-Stack Take-Home"
+          required
         />
-      </label>
-      <label className="flex flex-col gap-1">
-        <div className="text-sm font-medium">Seed GitHub Repo URL</div>
-        <input 
-          name="seed_repo_url" 
-          placeholder="https://github.com/org/repo" 
-          required 
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="seed_repo_url">Seed GitHub Repo URL</Label>
+        <Input
+          id="seed_repo_url"
+          name="seed_repo_url"
+          placeholder="https://github.com/org/repo"
+          required
         />
-      </label>
-      <label className="flex flex-col gap-1">
-        <div className="text-sm font-medium">Description</div>
-        <textarea 
-          name="description" 
-          rows={2} 
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="description">Description</Label>
+        <Textarea
+          id="description"
+          name="description"
+          rows={2}
+          placeholder="Brief description of the challenge..."
         />
-      </label>
-      <label className="flex flex-col gap-1">
-        <div className="text-sm font-medium">Instructions</div>
-        <textarea
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="instructions">Instructions</Label>
+        <Textarea
+          id="instructions"
           name="instructions"
           rows={4}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+          placeholder="Detailed instructions for candidates..."
         />
-      </label>
-      <label className="flex flex-col gap-1">
-        <div className="text-sm font-medium">Calendly Scheduling Link (Optional)</div>
-        <input
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="calendly_link">Calendly Scheduling Link (Optional)</Label>
+        <Input
+          id="calendly_link"
           name="calendly_link"
           type="url"
           placeholder="https://calendly.com/your-name/assessment-name"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
         />
-        <div className="text-xs text-gray-500">
+        <p className="text-xs text-muted-foreground">
           Optional: Set a specific Calendly link for this assessment. If not provided, the default link from Settings will be used.
-        </div>
-      </label>
-      <div className="flex gap-3">
-        <label className="flex-1 flex flex-col gap-1">
-          <div className="text-sm font-medium">Time to Start (hours)</div>
-          <input
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="start_within_hours">Time to Start (hours)</Label>
+          <Input
+            id="start_within_hours"
             name="start_within_hours"
             type="number"
             defaultValue={72}
             min={1}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
-        </label>
-        <label className="flex-1 flex flex-col gap-1">
-          <div className="text-sm font-medium">Time to Complete (hours)</div>
-          <input
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="complete_within_hours">Time to Complete (hours)</Label>
+          <Input
+            id="complete_within_hours"
             name="complete_within_hours"
             type="number"
             defaultValue={48}
             min={1}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
-        </label>
+        </div>
       </div>
 
-      <div className="border-t pt-4 mt-2">
-        <h4 className="text-sm font-medium mb-3">Grading Rubric (Required)</h4>
-        <div className="bg-gray-50 p-4 rounded-md">
+      <div className="border-t pt-6">
+        <h4 className="text-sm font-semibold mb-4">Grading Rubric (Required)</h4>
+        <div className="bg-muted/50 p-4 rounded-lg">
           <RubricBuilder
             onCriteriaChange={setRubricCriteria}
             initialCriteria={rubricCriteria}
@@ -178,13 +195,9 @@ export default function ChallengeCreationForm({ onCreated }: { onCreated?: (a: A
         </div>
       </div>
 
-      <button
-        type="submit"
-        disabled={loading}
-        className="bg-gray-900 hover:bg-gray-800 text-white py-2 px-3 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      >
+      <Button type="submit" disabled={loading} className="w-full">
         {loading ? "Creating..." : "Create Assessment"}
-      </button>
+      </Button>
     </form>
   );
 }

@@ -2,6 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { API_BASE_URL } from "@/utils/api";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 type Template = { id: string; key: string; value: string };
 
@@ -89,90 +95,100 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="max-w-2xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-4">Settings</h1>
-      <section className="rounded bg-white p-4 shadow-sm border">
-        <h2 className="text-lg font-semibold mb-3">Default Follow-Up Email</h2>
-        {message ? (
-          <div className="mb-3 text-sm {message.includes('Failed') ? 'text-red-700' : 'text-emerald-700'}">{message}</div>
-        ) : null}
-        {loading ? (
-          <div className="text-gray-500 text-sm">Loading…</div>
-        ) : (
-          <form onSubmit={onSave} className="grid gap-3">
-            <label className="grid gap-1">
-              <span className="text-sm font-medium">Subject</span>
-              <input
-                type="text"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                className="border rounded p-2 text-sm"
-                placeholder="Follow-Up Interview Invitation"
-              />
-            </label>
-            <label className="grid gap-1">
-              <span className="text-sm font-medium">Body (HTML allowed)</span>
-              <textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                className="border rounded p-2 text-sm h-48"
-                placeholder="<p>We'd like to schedule a follow-up interview. Please reply with your availability.</p>"
-              />
-            </label>
-            <div>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2 rounded bg-gray-900 text-white font-semibold disabled:bg-gray-400"
-              >
-                {saving ? "Saving…" : "Save"}
-              </button>
-            </div>
-          </form>
-        )}
-      </section>
-
-      <section className="rounded bg-white p-4 shadow-sm border mt-6">
-        <h2 className="text-lg font-semibold mb-3">Default Calendly Scheduling Link</h2>
-        <p className="text-sm text-gray-600 mb-4">
-          Default Calendly link used for all assessments. You can override this with assessment-specific links on the Challenges page.
+    <main className="py-8 space-y-6 max-w-3xl">
+      <div className="mb-8">
+        <h1 className="text-4xl font-bold tracking-tight mb-2">Settings</h1>
+        <p className="text-muted-foreground">
+          Configure default email templates and scheduling links
         </p>
-        {calendlyMessage ? (
-          <div className={`mb-3 text-sm ${calendlyMessage.includes('Failed') ? 'text-red-700' : 'text-emerald-700'}`}>{calendlyMessage}</div>
-        ) : null}
-        {calendlyLoading ? (
-          <div className="text-gray-500 text-sm">Loading…</div>
-        ) : (
-          <form onSubmit={onSaveCalendly} className="grid gap-3">
-            <label className="grid gap-1">
-              <span className="text-sm font-medium">Calendly Link</span>
-              <input
-                type="url"
-                value={calendlyLink}
-                onChange={(e) => setCalendlyLink(e.target.value)}
-                className="border rounded p-2 text-sm"
-                placeholder="https://calendly.com/your-name/30min"
-              />
-              <span className="text-xs text-gray-500">
-                Get your link from{" "}
-                <a href="https://calendly.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
-                  Calendly.com
-                </a>
-                {" "}(e.g., https://calendly.com/your-name/interview)
-              </span>
-            </label>
-            <div>
-              <button
-                type="submit"
-                disabled={calendlySaving}
-                className="px-4 py-2 rounded bg-gray-900 text-white font-semibold disabled:bg-gray-400"
-              >
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Default Follow-Up Email</CardTitle>
+          <CardDescription>
+            Email template sent to candidates when requesting follow-up interviews
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {message && (
+            <Alert variant={message.includes('Failed') ? 'destructive' : 'default'} className="mb-4">
+              <AlertDescription>{message}</AlertDescription>
+            </Alert>
+          )}
+          {loading ? (
+            <div className="text-muted-foreground text-sm">Loading…</div>
+          ) : (
+            <form onSubmit={onSave} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="subject">Subject</Label>
+                <Input
+                  id="subject"
+                  type="text"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="Follow-Up Interview Invitation"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="body">Body (HTML allowed)</Label>
+                <Textarea
+                  id="body"
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  className="min-h-48"
+                  placeholder="<p>We'd like to schedule a follow-up interview. Please reply with your availability.</p>"
+                />
+              </div>
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving…" : "Save"}
+              </Button>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Default Calendly Scheduling Link</CardTitle>
+          <CardDescription>
+            Default Calendly link used for all assessments. You can override this with assessment-specific links on the Challenges page.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {calendlyMessage && (
+            <Alert variant={calendlyMessage.includes('Failed') ? 'destructive' : 'default'} className="mb-4">
+              <AlertDescription>{calendlyMessage}</AlertDescription>
+            </Alert>
+          )}
+          {calendlyLoading ? (
+            <div className="text-muted-foreground text-sm">Loading…</div>
+          ) : (
+            <form onSubmit={onSaveCalendly} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="calendlyLink">Calendly Link</Label>
+                <Input
+                  id="calendlyLink"
+                  type="url"
+                  value={calendlyLink}
+                  onChange={(e) => setCalendlyLink(e.target.value)}
+                  placeholder="https://calendly.com/your-name/30min"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Get your link from{" "}
+                  <a href="https://calendly.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                    Calendly.com
+                  </a>
+                  {" "}(e.g., https://calendly.com/your-name/interview)
+                </p>
+              </div>
+              <Button type="submit" disabled={calendlySaving}>
                 {calendlySaving ? "Saving…" : "Save"}
-              </button>
-            </div>
-          </form>
-        )}
-      </section>
+              </Button>
+            </form>
+          )}
+        </CardContent>
+      </Card>
     </main>
   );
 }
