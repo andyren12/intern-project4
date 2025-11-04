@@ -88,18 +88,27 @@ def list_invites_with_details(db: Session = Depends(get_db)):
     for inv in invites:
         assessment = db.query(models.Assessment).get(inv.assessment_id)
         candidate = db.query(models.Candidate).get(inv.candidate_id)
-        results.append(
-            {
-                "id": inv.id,
-                "status": inv.status.value if hasattr(inv.status, "value") else str(inv.status),
-                "created_at": inv.created_at,
-                "start_deadline_at": inv.start_deadline_at,
-                "complete_deadline_at": inv.complete_deadline_at,
-                "started_at": inv.started_at,
-                "submitted_at": inv.submitted_at,
-                "candidate": candidate,
-                "assessment": assessment,
+        submission = db.query(models.Submission).filter(models.Submission.invite_id == inv.id).first()
+
+        result_dict = {
+            "id": inv.id,
+            "status": inv.status.value if hasattr(inv.status, "value") else str(inv.status),
+            "created_at": inv.created_at,
+            "start_deadline_at": inv.start_deadline_at,
+            "complete_deadline_at": inv.complete_deadline_at,
+            "started_at": inv.started_at,
+            "submitted_at": inv.submitted_at,
+            "candidate": candidate,
+            "assessment": assessment,
+        }
+
+        if submission:
+            result_dict["submission"] = {
+                "final_sha": submission.final_sha,
+                "submitted_at": submission.submitted_at,
+                "demo_link": submission.demo_link,
             }
-        )
+
+        results.append(result_dict)
     return results
 

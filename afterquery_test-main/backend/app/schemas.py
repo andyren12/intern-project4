@@ -74,6 +74,15 @@ class AssessmentLite(BaseModel):
         from_attributes = True
 
 
+class SubmissionLite(BaseModel):
+    final_sha: str | None
+    submitted_at: datetime
+    demo_link: str | None
+
+    class Config:
+        from_attributes = True
+
+
 class AdminInviteOut(BaseModel):
     id: UUID
     status: str
@@ -84,6 +93,7 @@ class AdminInviteOut(BaseModel):
     submitted_at: datetime | None
     candidate: CandidateLite
     assessment: AssessmentLite
+    submission: SubmissionLite | None = None
 
     class Config:
         from_attributes = True

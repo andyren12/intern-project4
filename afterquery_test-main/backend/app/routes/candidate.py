@@ -5,7 +5,7 @@ import hashlib
 import secrets
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -66,6 +66,20 @@ def get_start_page(slug: str, db: Session = Depends(get_db)):
                 "pinned_main_sha": cand_repo.pinned_main_sha,
             }
 
+    # include submission details if exists
+    submission = (
+        db.query(models.Submission)
+        .filter(models.Submission.invite_id == invite.id)
+        .order_by(models.Submission.submitted_at.desc())
+        .first()
+    )
+
+    if submission:
+        result["submission"] = {
+            "final_sha": submission.final_sha,
+            "submitted_at": submission.submitted_at,
+            "demo_link": submission.demo_link,
+        }
     return result
 
 
@@ -299,21 +313,30 @@ def _calculate_weighted_score(
 
 
 @router.post("/submit/{slug}")
-def submit_assessment(slug: str, db: Session = Depends(get_db)):
-    invite = db.query(models.AssessmentInvite).filter(models.AssessmentInvite.start_url_slug == slug).first()
+def submit_assessment(slug: str, body: dict = Body(None), db: Session = Depends(get_db)):
+    invite = db.query(models.AssessmentInvite).filter(
+        models.AssessmentInvite.start_url_slug == slug
+    ).first()
     if not invite:
         raise HTTPException(status_code=404, detail="Invite not found")
     if invite.status != models.InviteStatus.started:
         raise HTTPException(status_code=400, detail="Assessment is not in progress")
 
-    cand_repo = db.query(models.CandidateRepo).filter(models.CandidateRepo.invite_id == invite.id).first()
+    cand_repo = db.query(models.CandidateRepo).filter(
+        models.CandidateRepo.invite_id == invite.id
+    ).first()
     if not cand_repo:
         raise HTTPException(status_code=400, detail="Candidate repo not found")
+
+    demo_link = body.get("demo_link") if body else None
 
     now = datetime.utcnow()
 
     # revoke tokens
-    tokens = db.query(models.RepoAccessToken).filter(models.RepoAccessToken.candidate_repo_id == cand_repo.id, models.RepoAccessToken.revoked_at.is_(None)).all()
+    tokens = db.query(models.RepoAccessToken).filter(
+        models.RepoAccessToken.candidate_repo_id == cand_repo.id,
+        models.RepoAccessToken.revoked_at.is_(None)
+    ).all()
     for t in tokens:
         t.revoked_at = now
 
@@ -321,7 +344,8 @@ def submit_assessment(slug: str, db: Session = Depends(get_db)):
     submission = models.Submission(
         id=uuid.uuid4(),
         invite_id=invite.id,
-        final_sha=cand_repo.pinned_main_sha,  # TODO: fetch latest main SHA of candidate repo
+        final_sha=cand_repo.pinned_main_sha,
+        demo_link=demo_link,
         submitted_at=now,
     )
     db.add(submission)
@@ -331,10 +355,14 @@ def submit_assessment(slug: str, db: Session = Depends(get_db)):
 
     db.commit()
 
-    # Trigger automatic AI grading (fails silently if errors occur)
     _auto_grade_submission(invite.id, db)
 
-    return {"status": "submitted", "final_sha": submission.final_sha}
+    return {
+        "status": "submitted",
+        "final_sha": submission.final_sha,
+        "demo_link": submission.demo_link,
+    }
+
 
 
 @router.get("/commits/{slug}")

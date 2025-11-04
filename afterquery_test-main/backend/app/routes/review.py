@@ -69,6 +69,7 @@ def get_review_for_invite(invite_id: str, db: Session = Depends(get_db)):
         "submission": submission and {
             "final_sha": submission.final_sha,
             "submitted_at": submission.submitted_at,
+            "demo_link": submission.demo_link,
         },
         "commits": commits,
         "diff": diff_summary,

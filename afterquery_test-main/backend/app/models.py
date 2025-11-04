@@ -128,6 +128,8 @@ class Submission(Base):
     invite_id = Column(UUID(as_uuid=True), ForeignKey("assessment_invites.id", ondelete="CASCADE"), nullable=False, unique=True)
     final_sha = Column(Text)
     submitted_at = Column(DateTime(timezone=True), nullable=False)
+    demo_link = Column(Text, nullable=True)
+
 
     invite = relationship("AssessmentInvite", back_populates="submission")
 

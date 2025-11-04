@@ -22,6 +22,12 @@ type AssessmentLite = {
   archived: boolean;
 };
 
+type SubmissionLite = {
+  final_sha?: string | null;
+  submitted_at: string;
+  demo_link?: string | null;
+};
+
 type AdminInvite = {
   id: string;
   status: "pending" | "started" | "submitted" | string;
@@ -32,6 +38,7 @@ type AdminInvite = {
   submitted_at?: string | null;
   candidate: Candidate;
   assessment: AssessmentLite;
+  submission?: SubmissionLite | null;
 };
 
 async function fetchInvites(): Promise<AdminInvite[]> {
@@ -157,6 +164,19 @@ export default function AssignmentsPage() {
                               {new Date(inv.submitted_at).toLocaleString()}
                             </div>
                           )}
+                          {inv.submission?.demo_link && (
+                            <div className="col-span-2">
+                              <span className="font-medium">Demo Video:</span>{" "}
+                              <a
+                                href={inv.submission.demo_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline"
+                              >
+                                {inv.submission.demo_link}
+                              </a>
+                            </div>
+                          )}
                         </div>
                         <div>
                           <Badge
@@ -255,6 +275,19 @@ export default function AssignmentsPage() {
                     ? new Date(modalInvite.submitted_at).toLocaleString()
                     : "—"}
                 </div>
+                {modalInvite.submission?.demo_link && (
+                  <div className="col-span-2">
+                    <span className="font-medium text-foreground">Demo Video:</span>{" "}
+                    <a
+                      href={modalInvite.submission.demo_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      {modalInvite.submission.demo_link}
+                    </a>
+                  </div>
+                )}
               </div>
               <div>
                 <span className="font-medium">Status:</span>{" "}

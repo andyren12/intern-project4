@@ -32,7 +32,11 @@ export type ReviewData = {
     pinned_main_sha?: string | null;
     archived: boolean;
   } | null;
-  submission?: { final_sha?: string | null; submitted_at: string } | null;
+  submission?: {
+    final_sha?: string | null;
+    submitted_at: string;
+    demo_link?: string;
+  } | null;
   commits: any[];
   diff: {
     against: { seed_repo: string; branch: string };
@@ -162,17 +166,44 @@ export default function AdminReviewPanel({ data }: { data: ReviewData }) {
             <CardContent>
               {submission ? (
                 <div className="space-y-3 text-sm">
+                  {/* Final SHA */}
                   <div>
                     Final SHA:{" "}
                     <code className="text-primary">
                       {submission.final_sha || "(unknown)"}
                     </code>
                   </div>
+
+                  {/* Submitted Timestamp */}
                   <div>
                     Submitted At:{" "}
                     {new Date(submission.submitted_at).toLocaleString()}
                   </div>
 
+                  {submission.demo_link ? (
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">Demo Video:</span>
+                      <a
+                        href={submission.demo_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-blue-600 hover:text-blue-800"
+                        >
+                          View on Google Drive
+                        </Button>
+                      </a>
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground text-xs italic">
+                      No demo video submitted.
+                    </p>
+                  )}
+
+                  {/* Follow-Up Section */}
                   <Button onClick={sendFollowUp} size="sm" className="mt-3">
                     Send Follow-Up
                   </Button>

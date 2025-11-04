@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/utils/api";
-import { useMemo } from "react";
 
 export type StartMeta = {
   assessment: {
@@ -44,24 +43,22 @@ export default function CandidateStartPage({ slug }: { slug: string }) {
   const [commits, setCommits] = useState<any[]>([]);
   const [commitsError, setCommitsError] = useState<string | null>(null);
 
+  // --- Demo video ---
+  const [demoLink, setDemoLink] = useState("");
+  const [demoError, setDemoError] = useState<string | null>(null);
+
   useEffect(() => {
     api
       .get<StartMeta>(`/api/candidate/start/${slug}`)
       .then((data) => {
         setMeta(data);
-        // If assessment already started, populate git and repo info
-        if (data.git) {
-          setGit(data.git);
-        }
-        if (data.repo) {
-          setRepoUrl(data.repo.url);
-        }
+        if (data.git) setGit(data.git);
+        if (data.repo) setRepoUrl(data.repo.url);
       })
       .catch((e) => setError(e?.message || "Failed to load"))
       .finally(() => setLoading(false));
   }, [slug]);
 
-  // Fetch commits if started or submitted
   useEffect(() => {
     if (!meta) return;
     if (["started", "submitted"].includes(meta.invite.status)) {
@@ -70,7 +67,7 @@ export default function CandidateStartPage({ slug }: { slug: string }) {
       api
         .get<any[]>(`/api/candidate/commits/${slug}`)
         .then(setCommits)
-        .catch((e) => setCommitsError("Could not load commits"))
+        .catch(() => setCommitsError("Could not load commits"))
         .finally(() => setCommitLoading(false));
     } else {
       setCommits([]);
@@ -88,7 +85,6 @@ export default function CandidateStartPage({ slug }: { slug: string }) {
       setGit(res.git);
       setRepoUrl(res.repo.url);
       setToken(res.token);
-      // refresh meta after starting to get deadlines
       const m = await api.get<StartMeta>(`/api/candidate/start/${slug}`);
       setMeta(m);
     } catch (e: any) {
@@ -99,7 +95,24 @@ export default function CandidateStartPage({ slug }: { slug: string }) {
   async function handleSubmit() {
     try {
       setError(null);
-      await api.post(`/api/candidate/submit/${slug}`);
+      setSuccess(null);
+
+      // optional drive link validation
+      if (demoLink.trim()) {
+        const driveRegex =
+          /^(https:\/\/)?(drive\.google\.com\/|docs\.google\.com\/)[\w\/\-?=.&]+$/i;
+        if (!driveRegex.test(demoLink.trim())) {
+          setDemoError(
+            "Please enter a valid Google Drive link (or leave blank)."
+          );
+          return;
+        }
+      }
+
+      await api.post(`/api/candidate/submit/${slug}`, {
+        demo_link: demoLink.trim() || null,
+      });
+
       const m = await api.get<StartMeta>(`/api/candidate/start/${slug}`);
       setMeta(m);
       setSuccess(
@@ -121,11 +134,11 @@ export default function CandidateStartPage({ slug }: { slug: string }) {
 
   return (
     <div className="grid gap-6 max-w-2xl mx-auto p-6">
-      {success ? (
+      {success && (
         <div className="bg-emerald-50 border border-emerald-400 text-emerald-700 p-3 rounded">
           {success}
         </div>
-      ) : null}
+      )}
 
       {/* Status banner */}
       <div className="flex items-center gap-3">
@@ -149,20 +162,22 @@ export default function CandidateStartPage({ slug }: { slug: string }) {
         )}
       </div>
 
-      {/* Title and repo info */}
+      {/* Title */}
       <h2 className="text-2xl font-bold mb-1">{assessment.title}</h2>
       <div className="text-xs text-gray-500 mb-2">
         Seed: {assessment.seed_repo_url} · Branch: {assessment.branch}
       </div>
 
-      {/* Clone command */}
-      {git ? (
+      {/* Clone info */}
+      {git && (
         <section>
           <div className="font-semibold mb-1">
             A git repository has been created for you. Clone it with:
           </div>
           <div className="bg-gray-100 p-3 rounded flex items-center text-sm">
-            <code className="whitespace-nowrap overflow-x-auto">{`git clone ${git.clone_url}`}</code>
+            <code className="whitespace-nowrap overflow-x-auto">
+              {`git clone ${git.clone_url}`}
+            </code>
           </div>
           {repoUrl && (
             <div className="mt-2">
@@ -176,29 +191,43 @@ export default function CandidateStartPage({ slug }: { slug: string }) {
               </a>
             </div>
           )}
-          <div className="text-xs text-gray-500 mt-2">
-            Once complete, ensure your work is committed and pushed to the{" "}
-            <span className="font-bold">main</span> branch.
-          </div>
         </section>
-      ) : null}
+      )}
 
       {/* Instructions */}
       <section>
         <h3 className="font-bold mb-2 text-lg">Instructions</h3>
-        {assessment.instructions ? (
-          <div className="bg-gray-50 border border-gray-200 rounded p-3 whitespace-pre-line">
-            {assessment.instructions}
-          </div>
-        ) : (
-          <div className="bg-gray-50 border border-gray-200 rounded p-3">
-            No instructions have been provided for this challenge.
-          </div>
-        )}
+        <div className="bg-gray-50 border border-gray-200 rounded p-3 whitespace-pre-line">
+          {assessment.instructions || "No instructions have been provided."}
+        </div>
       </section>
 
-      {/* Commits info */}
-      {invite.status !== "pending" ? (
+      {/* --- Optional Video Demo --- */}
+      {invite.status === "started" && (
+        <section>
+          <h3 className="font-bold mb-2 text-lg">Optional Video Demo</h3>
+          <p className="text-sm text-gray-600 mb-2">
+            You may submit a Google Drive link with a short video demonstration of
+            your solution.
+          </p>
+          <input
+            type="url"
+            placeholder="https://drive.google.com/..."
+            value={demoLink}
+            onChange={(e) => {
+              setDemoLink(e.target.value);
+              setDemoError(null);
+            }}
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+          />
+          {demoError && (
+            <div className="text-red-600 text-sm mt-1">{demoError}</div>
+          )}
+        </section>
+      )}
+
+      {/* Commits */}
+      {invite.status !== "pending" && (
         <section>
           <h3 className="font-bold mb-2 text-lg">Your Commits</h3>
           <div className="bg-gray-50 border border-gray-200 rounded p-3">
@@ -212,7 +241,7 @@ export default function CandidateStartPage({ slug }: { slug: string }) {
               <>
                 <div className="text-sm mb-2">
                   You have pushed {commits.length} commit
-                  {commits.length > 1 ? "s" : ""} to the main branch:
+                  {commits.length > 1 ? "s" : ""}:
                 </div>
                 <ul className="divide-y divide-gray-100 text-sm">
                   {commits.map((c) => (
@@ -242,12 +271,9 @@ export default function CandidateStartPage({ slug }: { slug: string }) {
                 </ul>
               </>
             )}
-            <div className="text-xs text-gray-400 mt-2">
-              Tip: run <code>git push origin main</code> from your repo.
-            </div>
           </div>
         </section>
-      ) : null}
+      )}
 
       {/* Actions */}
       <div className="flex gap-3">
