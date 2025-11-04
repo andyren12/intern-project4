@@ -3,6 +3,7 @@
 import "./globals.css";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
+import { Toaster } from "@/components/ui/sonner";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -65,6 +66,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {children}
           </main>
         </div>
+        <Toaster />
       </body>
     </html>
   );

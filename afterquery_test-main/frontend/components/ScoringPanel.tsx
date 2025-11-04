@@ -1,16 +1,34 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { gradingApi, CriterionScore, Rubric, SubmissionScore } from "@/utils/grading-api";
+import {
+  gradingApi,
+  CriterionScore,
+  Rubric,
+  SubmissionScore,
+} from "@/utils/grading-api";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
+import { Loader2, BrainCircuit, CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface ScoringPanelProps {
   inviteId: string;
   assessmentId: string;
 }
 
-export default function ScoringPanel({ inviteId, assessmentId }: ScoringPanelProps) {
+export default function ScoringPanel({
+  inviteId,
+  assessmentId,
+}: ScoringPanelProps) {
   const [rubric, setRubric] = useState<Rubric | null>(null);
-  const [existingScore, setExistingScore] = useState<SubmissionScore | null>(null);
+  const [existingScore, setExistingScore] = useState<SubmissionScore | null>(
+    null
+  );
   const [scores, setScores] = useState<Record<string, CriterionScore>>({});
   const [notes, setNotes] = useState("");
   const [gradedBy, setGradedBy] = useState("admin@example.com");
@@ -28,11 +46,10 @@ export default function ScoringPanel({ inviteId, assessmentId }: ScoringPanelPro
     setLoading(true);
     setError(null);
     try {
-      // Load rubric
       const rubricData = await gradingApi.getRubric(assessmentId);
       setRubric(rubricData);
 
-      // Initialize scores from rubric
+      // Initialize blank scores
       const initialScores: Record<string, CriterionScore> = {};
       rubricData.criteria.forEach((criterion: any) => {
         initialScores[criterion.name] = {
@@ -42,20 +59,14 @@ export default function ScoringPanel({ inviteId, assessmentId }: ScoringPanelPro
         };
       });
 
-      // Try to load existing score
+      // Load existing score if available
       try {
-        const existingScoreData = await gradingApi.getScore(inviteId);
-        setExistingScore(existingScoreData);
-        setScores(
-          Object.keys(existingScoreData.criteria_scores).reduce((acc, key) => {
-            acc[key] = existingScoreData.criteria_scores[key];
-            return acc;
-          }, {} as Record<string, CriterionScore>)
-        );
-        setNotes(existingScoreData.notes || "");
-        setGradedBy(existingScoreData.graded_by || "admin@example.com");
+        const existing = await gradingApi.getScore(inviteId);
+        setExistingScore(existing);
+        setScores(existing.criteria_scores);
+        setNotes(existing.notes || "");
+        setGradedBy(existing.graded_by || "admin@example.com");
       } catch {
-        // No existing score, use initialized scores
         setScores(initialScores);
       }
     } catch (err: any) {
@@ -71,9 +82,10 @@ export default function ScoringPanel({ inviteId, assessmentId }: ScoringPanelPro
     setSuccess(false);
     try {
       await gradingApi.createScore(inviteId, scores, gradedBy, notes);
+      toast.success("Scores saved successfully!");
       setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
-      await loadData(); // Reload to get updated data
+      setTimeout(() => setSuccess(false), 2500);
+      await loadData();
     } catch (err: any) {
       setError(err?.message || "Failed to save score");
     } finally {
@@ -87,38 +99,28 @@ export default function ScoringPanel({ inviteId, assessmentId }: ScoringPanelPro
     setAiGrading(true);
     setError(null);
     try {
-      // Get criteria that can be AI-graded
       const aiCriteria = rubric.criteria
         .filter((c: any) => c.type === "manual" || c.type === "automated")
         .map((c: any) => c.name);
 
       const result = await gradingApi.aiGrade(inviteId, aiCriteria);
 
-      // Merge AI scores with existing scores
       setScores((prev) => ({
         ...prev,
         ...result.criteria_scores,
       }));
+
+      toast.success("AI grading completed!");
     } catch (err: any) {
+      toast.error("AI grading failed.");
       setError(err?.message || "AI grading failed");
     } finally {
       setAiGrading(false);
     }
   }
 
-  const updateScore = (criterionName: string, field: keyof CriterionScore, value: any) => {
-    setScores((prev) => ({
-      ...prev,
-      [criterionName]: {
-        ...prev[criterionName],
-        [field]: value,
-      },
-    }));
-  };
-
   const calculateTotalScore = () => {
     if (!rubric) return 0;
-
     let total = 0;
     rubric.criteria.forEach((criterion: any) => {
       const score = scores[criterion.name];
@@ -128,128 +130,200 @@ export default function ScoringPanel({ inviteId, assessmentId }: ScoringPanelPro
         total += weighted;
       }
     });
-
     return total.toFixed(2);
   };
 
   if (loading) {
     return (
-      <div className="border border-gray-300 rounded-lg p-6">
-        <div className="text-center text-gray-500">Loading rubric...</div>
-      </div>
+      <Card>
+        <CardContent className="flex items-center justify-center py-12 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin mr-2" />
+          Loading rubric...
+        </CardContent>
+      </Card>
     );
   }
 
   if (!rubric) {
     return (
-      <div className="border border-gray-300 rounded-lg p-6">
-        <div className="text-center text-gray-500">
+      <Alert variant="destructive">
+        <AlertDescription>
           No grading rubric defined for this assessment.
-        </div>
-      </div>
+        </AlertDescription>
+      </Alert>
     );
   }
 
   return (
-    <div className="border border-gray-300 rounded-lg p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <h3 className="text-xl font-semibold">AI Grading</h3>
-        <button
-          onClick={handleAIGrade}
-          disabled={aiGrading}
-          className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 font-semibold text-lg"
-        >
-          {aiGrading ? "AI Analyzing Code..." : "✨ Generate AI Score"}
-        </button>
-      </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>AI Grading Overview</span>
+            <Button
+              onClick={handleAIGrade}
+              disabled={aiGrading}
+              variant="default"
+              size="sm"
+            >
+              {aiGrading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" /> Analyzing...
+                </>
+              ) : (
+                <>
+                  <BrainCircuit className="w-4 h-4 mr-2" /> Generate AI Score
+                </>
+              )}
+            </Button>
+          </CardTitle>
+        </CardHeader>
 
-      {error && (
-        <div className="bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded">
-          {error}
-        </div>
-      )}
+        <CardContent>
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          {success && (
+            <Alert className="border-green-300 bg-green-50 text-green-800 mb-4">
+              <AlertDescription>
+                <CheckCircle2 className="inline w-4 h-4 mr-1" />
+                Scores saved successfully!
+              </AlertDescription>
+            </Alert>
+          )}
 
-      {success && (
-        <div className="bg-green-50 border border-green-300 text-green-700 px-4 py-3 rounded">
-          Score saved successfully!
-        </div>
-      )}
+          <div className="grid gap-5 mt-4">
+            {rubric.criteria.map((criterion: any) => (
+              <Card key={criterion.name} className="border border-muted">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-semibold">
+                    {criterion.name}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    {criterion.description}
+                  </p>
+                  <div className="text-xs text-muted-foreground">
+                    Weight: {(criterion.weight * 100).toFixed(0)}% | Max Score:{" "}
+                    {criterion.max_score}
+                  </div>
 
-      <div className="space-y-4">
-        {rubric.criteria.map((criterion: any) => (
-          <div key={criterion.name} className="border border-gray-200 rounded p-4 space-y-3">
-            <div className="flex justify-between items-start">
-              <div>
-                <h4 className="font-semibold">{criterion.name}</h4>
-                <p className="text-sm text-gray-600">{criterion.description}</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Weight: {(criterion.weight * 100).toFixed(0)}% | Max: {criterion.max_score}
-                </p>
-              </div>
+                  {/* Score slider or numeric field */}
+                  <div className="flex justify-between items-center mt-2">
+                    <div className="text-sm font-medium">Score</div>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={criterion.max_score}
+                      value={scores[criterion.name]?.score || 0}
+                      onChange={(e) =>
+                        setScores((prev) => ({
+                          ...prev,
+                          [criterion.name]: {
+                            ...prev[criterion.name],
+                            score: Number(e.target.value),
+                          },
+                        }))
+                      }
+                      className="w-24 text-right"
+                    />
+                  </div>
+
+                  <Progress
+                    value={
+                      ((scores[criterion.name]?.score || 0) /
+                        criterion.max_score) *
+                      100
+                    }
+                  />
+
+                  <div>
+                    <label className="text-sm font-medium block mb-1">
+                      AI Analysis
+                    </label>
+                    <Textarea
+                      value={scores[criterion.name]?.notes || ""}
+                      onChange={(e) =>
+                        setScores((prev) => ({
+                          ...prev,
+                          [criterion.name]: {
+                            ...prev[criterion.name],
+                            notes: e.target.value,
+                          },
+                        }))
+                      }
+                      placeholder="AI or manual feedback..."
+                      className="min-h-[80px]"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Summary & Save */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Final Summary</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="text-center">
+            <div className="text-3xl font-bold text-foreground mb-1">
+              Total Score: {calculateTotalScore()} / 100
             </div>
+            <Progress value={Number(calculateTotalScore())} className="mt-2" />
+          </div>
 
+          <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                AI Score (0-100)
+              <label className="text-sm font-medium block mb-1">
+                Graded By
               </label>
-              <div className="text-3xl font-bold text-purple-600">
-                {scores[criterion.name]?.score || 0}/100
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Click "Generate AI Score" above to analyze this submission
-              </p>
+              <Input
+                type="email"
+                value={gradedBy}
+                onChange={(e) => setGradedBy(e.target.value)}
+                placeholder="Enter grader email"
+              />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">AI Analysis</label>
-              <div className="w-full px-3 py-2 border border-gray-200 rounded bg-gray-50 text-sm text-gray-700 min-h-[60px]">
-                {scores[criterion.name]?.notes || "No analysis yet. Generate AI score to see detailed feedback."}
-              </div>
+              <label className="text-sm font-medium block mb-1">
+                Overall Notes
+              </label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Overall feedback for the candidate..."
+                rows={3}
+              />
             </div>
+
+            <Button
+              onClick={handleSave}
+              disabled={saving}
+              size="lg"
+              className="w-full"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" /> Saving...
+                </>
+              ) : existingScore ? (
+                "Update AI Grades"
+              ) : (
+                "Save AI Grades"
+              )}
+            </Button>
           </div>
-        ))}
-      </div>
-
-      <div className="border-t pt-4">
-        <div className="text-2xl font-bold text-center mb-4">
-          Total Score: {calculateTotalScore()}/100
-        </div>
-
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Graded By (email)
-            </label>
-            <input
-              type="email"
-              value={gradedBy}
-              onChange={(e) => setGradedBy(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Overall Notes
-            </label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-              placeholder="Overall feedback for the candidate..."
-            />
-          </div>
-
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 font-semibold"
-          >
-            {saving ? "Saving..." : existingScore ? "Update AI Grades" : "Save AI Grades"}
-          </button>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

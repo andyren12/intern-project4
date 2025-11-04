@@ -3,6 +3,10 @@
 import { useState } from "react";
 import { api } from "@/utils/api";
 import type { Assessment } from "@/components/ChallengeCreationForm";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export type Invite = {
   id: string;
@@ -63,38 +67,40 @@ export default function InviteForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-3 max-w-2xl">
-      <h3 className="m-0 text-xl font-semibold mb-2">Candidate Details</h3>
-      {error ? <div className="text-red-700 text-sm py-1">{error}</div> : null}
-      {success ? (
-        <div className="text-emerald-700 text-sm py-1">{success}</div>
-      ) : null}
-      <label className="flex flex-col gap-1">
-        <div className="text-sm font-medium">Candidate Email</div>
-        <input
+    <form onSubmit={handleSubmit} className="space-y-4 max-w-2xl">
+      <h3 className="text-xl font-semibold">Candidate Details</h3>
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      {success && (
+        <Alert>
+          <AlertDescription className="text-green-600">{success}</AlertDescription>
+        </Alert>
+      )}
+      <div className="space-y-2">
+        <Label htmlFor="email">Candidate Email</Label>
+        <Input
+          id="email"
           name="email"
           type="email"
           placeholder="candidate@example.com"
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
-      </label>
-      <label className="flex flex-col gap-1">
-        <div className="text-sm font-medium">Candidate Name</div>
-        <input
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="full_name">Candidate Name</Label>
+        <Input
+          id="full_name"
           name="full_name"
           placeholder="Ada Lovelace"
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
-      </label>
-      <button
-        type="submit"
-        disabled={loading}
-        className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      >
+      </div>
+      <Button type="submit" disabled={loading} className="w-full">
         {loading ? "Sending..." : "Send Invite"}
-      </button>
+      </Button>
     </form>
   );
 }

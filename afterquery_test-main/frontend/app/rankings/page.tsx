@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { gradingApi, RankingEntry } from "@/utils/grading-api";
 import Link from "next/link";
 import { API_BASE_URL } from "@/utils/api";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -14,6 +15,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Table,
   TableBody,
@@ -38,6 +49,19 @@ export default function RankingsPage() {
   const [sendingEmails, setSendingEmails] = useState(false);
   const [scheduleTopNInput, setScheduleTopNInput] = useState("5");
   const [sendingScheduling, setSendingScheduling] = useState(false);
+
+  // Confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void;
+  }>({
+    open: false,
+    title: "",
+    description: "",
+    onConfirm: () => {},
+  });
 
   useEffect(() => {
     if (assessmentId) {
@@ -108,9 +132,18 @@ export default function RankingsPage() {
     }
   };
 
+  const confirmResetRankingsOrder = () => {
+    setConfirmDialog({
+      open: true,
+      title: "Reset Rankings Order",
+      description: "Reset to automatic score-based ranking? This will remove your manual ordering.",
+      onConfirm: resetRankingsOrder,
+    });
+  };
+
   const resetRankingsOrder = async () => {
     if (!assessmentId) return;
-    if (!confirm("Reset to automatic score-based ranking?")) return;
+    setConfirmDialog({ ...confirmDialog, open: false });
 
     setSaving(true);
     setError(null);
@@ -130,18 +163,23 @@ export default function RankingsPage() {
     }
   };
 
+  const confirmSendBulkFollowupEmails = () => {
+    const emailTopN = parseInt(emailTopNInput) || 1;
+    setConfirmDialog({
+      open: true,
+      title: "Send Follow-Up Emails",
+      description: `Send follow-up emails to the top ${emailTopN} candidate${
+        emailTopN !== 1 ? "s" : ""
+      }?`,
+      onConfirm: sendBulkFollowupEmails,
+    });
+  };
+
   const sendBulkFollowupEmails = async () => {
     if (!assessmentId) return;
+    setConfirmDialog({ ...confirmDialog, open: false });
 
     const emailTopN = parseInt(emailTopNInput) || 1;
-    if (
-      !confirm(
-        `Send follow-up emails to the top ${emailTopN} candidate${
-          emailTopN !== 1 ? "s" : ""
-        }?`
-      )
-    )
-      return;
 
     setSendingEmails(true);
     setError(null);
@@ -155,15 +193,16 @@ export default function RankingsPage() {
       );
 
       if (result.failed_count > 0) {
-        alert(
-          `Sent ${result.sent_count} emails successfully.\n` +
-            `Failed to send ${result.failed_count} emails.\n\n` +
-            `Failed recipients:\n${result.failed_emails
-              .map((f) => `- ${f.email}: ${f.error}`)
-              .join("\n")}`
+        toast.warning(
+          `Sent ${result.sent_count} emails successfully. Failed to send ${result.failed_count} emails.`,
+          {
+            description: result.failed_emails
+              .map((f) => `${f.email}: ${f.error}`)
+              .join(", "),
+          }
         );
       } else {
-        alert(
+        toast.success(
           `Successfully sent follow-up emails to top ${emailTopN} candidate${
             emailTopN !== 1 ? "s" : ""
           }!`
@@ -176,18 +215,23 @@ export default function RankingsPage() {
     }
   };
 
+  const confirmSendBulkScheduling = () => {
+    const scheduleTopN = parseInt(scheduleTopNInput) || 1;
+    setConfirmDialog({
+      open: true,
+      title: "Send Scheduling Invitations",
+      description: `Send scheduling invitations to the top ${scheduleTopN} candidate${
+        scheduleTopN !== 1 ? "s" : ""
+      }?`,
+      onConfirm: sendBulkSchedulingEmails,
+    });
+  };
+
   const sendBulkSchedulingEmails = async () => {
     if (!assessmentId) return;
+    setConfirmDialog({ ...confirmDialog, open: false });
 
     const scheduleTopN = parseInt(scheduleTopNInput) || 1;
-    if (
-      !confirm(
-        `Send scheduling invitations to the top ${scheduleTopN} candidate${
-          scheduleTopN !== 1 ? "s" : ""
-        }?`
-      )
-    )
-      return;
 
     setSendingScheduling(true);
     setError(null);
@@ -201,15 +245,16 @@ export default function RankingsPage() {
       );
 
       if (result.failed_count > 0) {
-        alert(
-          `Sent ${result.sent_count} scheduling invitations successfully.\n` +
-            `Failed to send ${result.failed_count} invitations.\n\n` +
-            `Failed recipients:\n${result.failed_emails
-              .map((f) => `- ${f.email}: ${f.error}`)
-              .join("\n")}`
+        toast.warning(
+          `Sent ${result.sent_count} scheduling invitations successfully. Failed to send ${result.failed_count} invitations.`,
+          {
+            description: result.failed_emails
+              .map((f) => `${f.email}: ${f.error}`)
+              .join(", "),
+          }
         );
       } else {
-        alert(
+        toast.success(
           `Successfully sent scheduling invitations to top ${scheduleTopN} candidate${
             scheduleTopN !== 1 ? "s" : ""
           }!`
@@ -362,26 +407,28 @@ export default function RankingsPage() {
                         </Link>
                       </Button>
                       <Button
-                        onClick={async () => {
-                          if (
-                            !confirm(
-                              `Send follow-up email to ${
-                                entry.candidate_name || entry.candidate_email
-                              }?`
-                            )
-                          )
-                            return;
-                          try {
-                            await fetch(
-                              `${API_BASE_URL}/api/review/followup/${entry.invite_id}`,
-                              {
-                                method: "POST",
+                        onClick={() => {
+                          setConfirmDialog({
+                            open: true,
+                            title: "Send Follow-Up Email",
+                            description: `Send follow-up email to ${
+                              entry.candidate_name || entry.candidate_email
+                            }?`,
+                            onConfirm: async () => {
+                              setConfirmDialog({ ...confirmDialog, open: false });
+                              try {
+                                await fetch(
+                                  `${API_BASE_URL}/api/review/followup/${entry.invite_id}`,
+                                  {
+                                    method: "POST",
+                                  }
+                                );
+                                toast.success("Follow-up email sent!");
+                              } catch (err: any) {
+                                toast.error(`Failed: ${err.message}`);
                               }
-                            );
-                            alert("Follow-up email sent!");
-                          } catch (err: any) {
-                            alert(`Failed: ${err.message}`);
-                          }
+                            },
+                          });
                         }}
                         variant="outline"
                         size="sm"
@@ -389,26 +436,28 @@ export default function RankingsPage() {
                         Email
                       </Button>
                       <Button
-                        onClick={async () => {
-                          if (
-                            !confirm(
-                              `Send scheduling invitation to ${
-                                entry.candidate_name || entry.candidate_email
-                              }?`
-                            )
-                          )
-                            return;
-                          try {
-                            await fetch(
-                              `${API_BASE_URL}/api/review/scheduling/${entry.invite_id}`,
-                              {
-                                method: "POST",
+                        onClick={() => {
+                          setConfirmDialog({
+                            open: true,
+                            title: "Send Scheduling Invitation",
+                            description: `Send scheduling invitation to ${
+                              entry.candidate_name || entry.candidate_email
+                            }?`,
+                            onConfirm: async () => {
+                              setConfirmDialog({ ...confirmDialog, open: false });
+                              try {
+                                await fetch(
+                                  `${API_BASE_URL}/api/review/scheduling/${entry.invite_id}`,
+                                  {
+                                    method: "POST",
+                                  }
+                                );
+                                toast.success("Scheduling invitation sent!");
+                              } catch (err: any) {
+                                toast.error(`Failed: ${err.message}`);
                               }
-                            );
-                            alert("Scheduling invitation sent!");
-                          } catch (err: any) {
-                            alert(`Failed: ${err.message}`);
-                          }
+                            },
+                          });
                         }}
                         variant="outline"
                         size="sm"
@@ -435,7 +484,7 @@ export default function RankingsPage() {
             {saving ? "Saving..." : "Save Order"}
           </Button>
           <Button
-            onClick={resetRankingsOrder}
+            onClick={confirmResetRankingsOrder}
             disabled={saving}
             variant="secondary"
             size="sm"
@@ -473,7 +522,7 @@ export default function RankingsPage() {
                     className="w-20"
                   />
                   <Button
-                    onClick={sendBulkFollowupEmails}
+                    onClick={confirmSendBulkFollowupEmails}
                     disabled={sendingEmails}
                     variant="default"
                     size="sm"
@@ -504,7 +553,7 @@ export default function RankingsPage() {
                     className="w-20"
                   />
                   <Button
-                    onClick={sendBulkSchedulingEmails}
+                    onClick={confirmSendBulkScheduling}
                     disabled={sendingScheduling}
                     variant="default"
                     size="sm"
@@ -568,6 +617,23 @@ export default function RankingsPage() {
           </CardContent>
         </Card>
       )}
+
+      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog({ ...confirmDialog, open })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmDialog.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmDialog.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmDialog({ ...confirmDialog, open: false })}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDialog.onConfirm}>
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }
