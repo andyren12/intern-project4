@@ -4,11 +4,18 @@ import { useEffect, useState, useMemo } from "react";
 import { api } from "@/utils/api";
 import type { Assessment } from "@/components/ChallengeCreationForm";
 import InviteForm from "@/components/InviteForm";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import Link from "next/link";
 
 type Candidate = {
@@ -88,22 +95,20 @@ export default function ChallengeDetailPage({
       {assessment ? (
         <>
           <div className="space-y-2">
-            <h1 className="text-4xl font-bold tracking-tight">{assessment.title}</h1>
-            <p className="text-muted-foreground">
-              Manage invitations and track candidate progress
-            </p>
+            <h1 className="text-4xl font-bold tracking-tight">
+              {assessment.title}
+            </h1>
           </div>
 
           <Card>
             <CardHeader>
               <CardTitle>Challenge Details</CardTitle>
-              <CardDescription>
-                Configuration and requirements for this assessment
-              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">Seed Repository</p>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Seed Repository
+                </p>
                 <a
                   href={assessment.seed_repo_url}
                   target="_blank"
@@ -115,7 +120,9 @@ export default function ChallengeDetailPage({
               </div>
               {assessment.description && (
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-muted-foreground">Description</p>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Description
+                  </p>
                   <p className="text-sm whitespace-pre-wrap">
                     {assessment.description}
                   </p>
@@ -123,7 +130,9 @@ export default function ChallengeDetailPage({
               )}
               {assessment.instructions && (
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-muted-foreground">Instructions</p>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Instructions
+                  </p>
                   <p className="text-sm whitespace-pre-wrap">
                     {assessment.instructions}
                   </p>
@@ -137,7 +146,6 @@ export default function ChallengeDetailPage({
               <div className="flex justify-between items-center">
                 <div>
                   <CardTitle>Submissions ({invites.length})</CardTitle>
-                  <CardDescription>Track candidate progress and submissions</CardDescription>
                 </div>
                 <Button asChild>
                   <Link href={`/rankings?assessmentId=${id}`}>
@@ -147,7 +155,11 @@ export default function ChallengeDetailPage({
               </div>
             </CardHeader>
             <CardContent>
-              <Tabs defaultValue="all" value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
+              <Tabs
+                defaultValue="all"
+                value={activeTab}
+                onValueChange={(v) => setActiveTab(v as any)}
+              >
                 <TabsList className="mb-4">
                   <TabsTrigger value="all">All</TabsTrigger>
                   <TabsTrigger value="pending">Pending</TabsTrigger>
@@ -161,66 +173,56 @@ export default function ChallengeDetailPage({
                       No submissions in this category.
                     </div>
                   ) : (
-                    <div className="space-y-3">
-                      {filteredInvites.map((inv) => (
-                        <Card key={inv.id} className="hover:shadow-md transition-shadow">
-                          <CardContent className="pt-6">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="flex-1 space-y-3">
-                                <div>
-                                  <h3 className="font-semibold text-lg">
-                                    {inv.candidate.full_name || inv.candidate.email}
-                                  </h3>
-                                  <p className="text-sm text-muted-foreground">
-                                    {inv.candidate.email}
-                                  </p>
-                                </div>
-                                <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
-                                  <div>
-                                    <span className="font-medium">Invited:</span>{" "}
-                                    {new Date(inv.created_at).toLocaleString()}
-                                  </div>
-                                  <div>
-                                    <span className="font-medium">Start by:</span>{" "}
-                                    {inv.start_deadline_at
-                                      ? new Date(inv.start_deadline_at).toLocaleString()
-                                      : "—"}
-                                  </div>
-                                  <div>
-                                    <span className="font-medium">Started:</span>{" "}
-                                    {inv.started_at
-                                      ? new Date(inv.started_at).toLocaleString()
-                                      : "—"}
-                                  </div>
-                                  <div>
-                                    <span className="font-medium">Complete by:</span>{" "}
-                                    {inv.complete_deadline_at
-                                      ? new Date(inv.complete_deadline_at).toLocaleString()
-                                      : "—"}
-                                  </div>
-                                  {inv.submitted_at && (
-                                    <div className="col-span-2">
-                                      <span className="font-medium">Submitted:</span>{" "}
-                                      {new Date(inv.submitted_at).toLocaleString()}
-                                    </div>
-                                  )}
-                                </div>
-                                <div>
-                                  <Badge
-                                    variant={
-                                      inv.status === "submitted"
-                                        ? "default"
-                                        : inv.status === "started"
-                                        ? "secondary"
-                                        : "outline"
-                                    }
-                                    className="capitalize"
-                                  >
-                                    {inv.status}
-                                  </Badge>
-                                </div>
-                              </div>
-                              <div className="flex flex-col gap-2">
+                    <div className="max-h-[500px] overflow-y-auto border rounded-md">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-background">
+                          <TableRow>
+                            <TableHead>Candidate</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Invited</TableHead>
+                            <TableHead>Started</TableHead>
+                            <TableHead>Submitted</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredInvites.map((inv) => (
+                            <TableRow key={inv.id} className="hover:bg-muted/50">
+                              <TableCell className="font-medium">
+                                {inv.candidate.full_name || inv.candidate.email}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {inv.candidate.email}
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant={
+                                    inv.status === "submitted"
+                                      ? "default"
+                                      : inv.status === "started"
+                                      ? "secondary"
+                                      : "outline"
+                                  }
+                                  className="capitalize"
+                                >
+                                  {inv.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {new Date(inv.created_at).toLocaleDateString()}
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {inv.started_at
+                                  ? new Date(inv.started_at).toLocaleDateString()
+                                  : "—"}
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {inv.submitted_at
+                                  ? new Date(inv.submitted_at).toLocaleDateString()
+                                  : "—"}
+                              </TableCell>
+                              <TableCell className="text-right">
                                 {inv.status === "submitted" ? (
                                   <Button asChild variant="default" size="sm">
                                     <Link href={`/review?inviteId=${inv.id}`}>
@@ -234,11 +236,11 @@ export default function ChallengeDetailPage({
                                     </Link>
                                   </Button>
                                 ) : null}
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     </div>
                   )}
                 </TabsContent>
