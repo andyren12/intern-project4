@@ -38,6 +38,10 @@ def create_invite(payload: InviteCreate, db: Session = Depends(get_db)):
             created_at=datetime.now(timezone.utc),
         )
         db.add(candidate)
+    else:
+        # Update the name if provided in the new invite
+        if payload.full_name:
+            candidate.full_name = payload.full_name
 
     start_deadline_at = datetime.now(timezone.utc) + timedelta(hours=assessment.start_within_hours)
 
